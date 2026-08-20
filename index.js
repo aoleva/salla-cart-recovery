@@ -1,28 +1,54 @@
 const express = require('express');
+const axios = require('axios');
 const app = express();
 
 app.use(express.json());
 
-app.post('/webhook/salla', async (req, res) => {
+const PORT = process.env.PORT || 3000;
+
+// دالة إرسال الواتساب
+async function sendWhatsAppMessage(mobile, customerName, cartTotal) {
+    const API_URL = "رابط_API_الخاص_بك"; 
+    const INSTANCE_ID = "instanceXXXX";
+    const TOKEN = "token_خاص_بك";
+
+    const message = `أهلاً ${customerName}، لاحظنا أنك تركت سلة بقيمة ${cartTotal} ريال. 🛒\nاستخدم الكوبون "SAVE20" لتحصل على خصم 20% وأكمل طلبك الآن!`;
+
     try {
-        const eventData = req.body;
-        console.log('تم استلام حدث جديد من سلة:', eventData.event);
-
-        if (eventData.event === 'cart.created' || eventData.event === 'cart.abandoned') {
-            const customerPhone = eventData.data.customer.mobile;
-            const customerName = eventData.data.customer.first_name;
-            const cartTotal = eventData.data.total;
-            console.log(`رسالة استرداد سلة لـ: ${customerName} على الرقم ${customerPhone}`);
-        }
-
-        return res.status(200).json({ status: 'success', message: 'Webhook received successfully' });
+        await axios.post(`${API_URL}/instances/${INSTANCE_ID}/messages/chat?token=${TOKEN}`, {
+            to: mobile,
+            body: message
+        });
+        console.log("✅ تم إرسال رسالة الواتساب بنجاح للعميل:", customerName);
     } catch (error) {
-        console.error('خطأ في معالجة الويب هوك:', error);
-        return res.status(500).json({ status: 'error', message: error.message });
+        console.error("❌ فشل إرسال الرسالة:", error.message);
     }
+}
+
+app.post('/webhook/salla', async (req, res) => {
+    const data = req.body;
+
+    console.log("-----------------------------------------");
+    console.log("🔔 وصلت سلة متروكة جديدة!");
+
+    if (data.event === 'cart.abandoned' && data.data) {
+        const customer = data.data.customer;
+        const total = data.data.cart?.total?.amount || 0;
+
+        if (customer && customer.mobile) {
+            console.log(`👤 العميل: ${customer.first_name || ''} - 📱 الجوال: ${customer.mobile}`);
+            await sendWhatsAppMessage(customer.mobile, customer.first_name || 'عميلنا العزيز', total);
+        }
+    }
+    console.log("-----------------------------------------");
+
+    res.status(200).send({ status: "success" });
 });
 
-const PORT = process.env.PORT || 3000;
+app.get('/', (req, res) => {
+    res.send('السيرفر يعمل بكفاءة!');
+});
+
 app.listen(PORT, () => {
-    console.log(`السيرفر يعمل بنجاح على البورت: ${PORT}`);
+    console.log(`السيرفر يعمل على البورت: ${PORT}`);
 });
