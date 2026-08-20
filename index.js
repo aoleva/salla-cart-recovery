@@ -6,16 +6,16 @@ app.use(express.json());
 
 const PORT = process.env.PORT || 3000;
 
-// دالة إرسال الواتساب
+// دالة إرسال الواتساب (تم وضع بياناتك هنا)
 async function sendWhatsAppMessage(mobile, customerName, cartTotal) {
-    const API_URL = "رابط_API_الخاص_بك"; 
-    const INSTANCE_ID = "instanceXXXX";
-    const TOKEN = "token_خاص_بك";
+    const API_URL = "https://api.ultramsg.com/instance189061/"; 
+    const INSTANCE_ID = "189061";
+    const TOKEN = "5undhi8grr4dtap6";
 
     const message = `أهلاً ${customerName}، لاحظنا أنك تركت سلة بقيمة ${cartTotal} ريال. 🛒\nاستخدم الكوبون "SAVE20" لتحصل على خصم 20% وأكمل طلبك الآن!`;
 
     try {
-        await axios.post(`${API_URL}/instances/${INSTANCE_ID}/messages/chat?token=${TOKEN}`, {
+        await axios.post(`${API_URL}messages/chat?token=${TOKEN}`, {
             to: mobile,
             body: message
         });
