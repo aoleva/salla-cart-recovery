@@ -29,10 +29,6 @@
 
 <body>
 
-  <!-- ========================================
-       شاشة تحميل التطبيق
-  ========================================= -->
-
   <main
     id="embeddedApp"
     style="
@@ -68,20 +64,30 @@
   </main>
 
 
-  <!-- ========================================
-       Salla Embedded SDK
+  <!--
+    Salla Embedded SDK v0.2.6
+    يحتاج process.env داخل Browser bundle.
+    نوفر Browser shim قبل تحميل SDK.
+  -->
 
-       مهم:
-       الـ SDK يتم تحميله هنا فقط.
-       لا يتم تحميله داخل dashboard.html
-  ========================================= -->
+  <script>
+    window.process =
+      window.process || {};
+
+    window.process.env =
+      window.process.env || {};
+
+    window.process.env.NODE_ENV =
+      'production';
+  </script>
+
+
+  <!-- Salla Embedded SDK -->
 
   <script src="/vendor/salla-embedded-sdk.js"></script>
 
 
-  <!-- ========================================
-       تشغيل المصادقة مع سلة
-  ========================================= -->
+  <!-- تشغيل التطبيق -->
 
   <script src="/embedded.js"></script>
 
