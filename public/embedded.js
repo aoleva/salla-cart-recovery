@@ -19,7 +19,7 @@
 
     if (!token) {
       throw new Error(
-        'لم يتم استلام جلسة سلة.'
+        'لم يتم استلام Token من سلة.'
       );
     }
 
@@ -28,32 +28,29 @@
         '/api/embedded/login',
         {
           method: 'POST',
-
           credentials: 'include',
-
           headers: {
             'Content-Type':
               'application/json'
           },
-
-          body:
-            JSON.stringify({
-              token
-            })
+          body: JSON.stringify({
+            token
+          })
         }
       );
 
-    const result =
+    const data =
       await response.json();
 
     if (!response.ok) {
       throw new Error(
-        result.message ||
+        data.message ||
         'تعذر التحقق من جلسة سلة.'
       );
     }
 
-    // لا نعمل ready هنا لأننا سننتقل إلى dashboard
+    embedded.ready();
+
     window.location.replace(
       '/dashboard'
     );
@@ -63,12 +60,6 @@
       'Embedded startup error:',
       error
     );
-
-    // نخفي Skeleton حتى يظهر الخطأ الحقيقي
-    try {
-      embedded.ready();
-      embedded.ui?.loading?.hide?.();
-    } catch (_) {}
 
     document.body.innerHTML =
       `<div style="
