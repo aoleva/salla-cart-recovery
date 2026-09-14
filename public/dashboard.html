@@ -1,444 +1,272 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
-
 <head>
   <meta charset="UTF-8">
-
-  <meta
-    name="viewport"
-    content="width=device-width, initial-scale=1.0"
-  >
-
-  <meta
-    name="robots"
-    content="noindex,nofollow,noarchive"
-  >
-
-  <title>
-    استعادة السلات المتروكة
-  </title>
-
-  <link
-    rel="stylesheet"
-    href="/styles.css"
-  >
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex,nofollow,noarchive">
+  <meta name="referrer" content="same-origin">
+  <title>استعادة السلات المتروكة</title>
+  <link rel="stylesheet" href="/dashboard.css">
 </head>
 
 <body>
-
-  <div class="app-shell">
-
-    <!-- ========================================
-         Header
-    ========================================= -->
-
-    <header class="topbar">
-
-      <div>
-
-        <h1>
-          استعادة السلات المتروكة
-        </h1>
-
+  <main class="app-shell">
+    <header class="hero">
+      <div class="hero-copy">
+        <span class="eyebrow">استعادة السلات المتروكة</span>
+        <h1>حوّل السلات المتروكة إلى طلبات مكتملة</h1>
         <p>
-          استرجع عملاءك تلقائيًا عبر WhatsApp
+          أرسل تذكير WhatsApp تلقائيًا للعميل بعد ترك السلة، مع رابط مباشر
+          لإكمال الطلب وخصم اختياري.
         </p>
-
       </div>
 
-      <div
-        id="connectionBadge"
-        class="status-badge status-offline"
-      >
-        WhatsApp غير متصل
+      <div class="hero-status">
+        <span id="recoveryBadge" class="pill pill-muted">الاستعادة متوقفة</span>
+        <span id="connectionBadge" class="pill pill-warning">جاري التحقق من WhatsApp...</span>
       </div>
-
     </header>
 
+    <section id="pageAlert" class="alert hidden" role="status" aria-live="polite"></section>
 
-    <main class="dashboard">
-
-
-      <!-- ========================================
-           حالة WhatsApp
-      ========================================= -->
-
-      <section class="card">
-
-        <div class="card-header">
-
-          <div>
-
-            <h2>
-              ربط WhatsApp
-            </h2>
-
-            <p>
-              اربط رقم المتجر مرة واحدة،
-              وبعدها يتم إرسال رسائل الاستعادة تلقائيًا.
-            </p>
-
-          </div>
-
+    <section class="card connection-card">
+      <div class="card-heading">
+        <div>
+          <span class="step-label">الخطوة 1</span>
+          <h2>اربط WhatsApp</h2>
+          <p>اربط رقم المتجر مرة واحدة، وبعدها يتم إرسال رسائل الاستعادة تلقائيًا.</p>
         </div>
 
+        <div id="whatsappVisual" class="connection-visual is-checking" aria-hidden="true">
+          <span class="connection-dot"></span>
+        </div>
+      </div>
 
-        <div class="whatsapp-box">
-
-          <div>
-
-            <div class="label">
-              حالة الاتصال
-            </div>
-
-            <div
-              id="whatsappStatus"
-              class="value"
-              aria-live="polite"
-            >
-              جاري التحقق...
-            </div>
-
-            <div
-              id="whatsappPhone"
-              class="muted"
-            ></div>
-
-          </div>
-
-
-          <div class="actions">
-
-            <button
-              id="connectWhatsappBtn"
-              class="btn btn-primary"
-              type="button"
-            >
-              ربط WhatsApp
-            </button>
-
-            <button
-              id="refreshWhatsappBtn"
-              class="btn btn-secondary"
-              type="button"
-            >
-              تحديث الحالة
-            </button>
-
-          </div>
-
+      <div class="connection-panel">
+        <div class="connection-info">
+          <span class="field-label">حالة الاتصال</span>
+          <strong id="whatsappStatus">جاري التحقق...</strong>
+          <span id="whatsappPhone" class="phone-text hidden"></span>
+          <span id="whatsappHint" class="field-help">
+            سنعرض لك رمز QR عند بدء الربط.
+          </span>
         </div>
 
+        <div class="button-row">
+          <button id="connectWhatsappBtn" class="btn btn-primary" type="button">
+            ربط WhatsApp
+          </button>
 
-        <div
-          id="qrContainer"
-          class="qr-container hidden"
-        >
+          <button id="refreshWhatsappBtn" class="btn btn-secondary" type="button">
+            تحديث الحالة
+          </button>
 
-          <h3>
-            امسح QR Code من WhatsApp
-          </h3>
+          <button id="disconnectWhatsappBtn" class="btn btn-danger-soft hidden" type="button">
+            فصل الرقم
+          </button>
+        </div>
+      </div>
+    </section>
 
-          <p>
-            WhatsApp ← الأجهزة المرتبطة ← ربط جهاز
-          </p>
+    <section class="card">
+      <div class="card-heading">
+        <div>
+          <span class="step-label">الخطوة 2</span>
+          <h2>إعدادات الاستعادة</h2>
+          <p>اختر توقيت الرسالة والعرض المناسب. باقي بيانات العميل والسلة تُضاف تلقائيًا.</p>
+        </div>
 
-          <img
-            id="qrImage"
-            alt="WhatsApp QR Code"
+        <label class="switch-control">
+          <input id="enabled" type="checkbox">
+          <span class="switch-ui" aria-hidden="true"></span>
+          <span class="switch-copy">
+            <strong>تشغيل الاستعادة</strong>
+            <small>إرسال تلقائي عند ترك السلة</small>
+          </span>
+        </label>
+      </div>
+
+      <div class="settings-grid">
+        <div class="form-field">
+          <label for="sendAfterMinutes">إرسال التذكير بعد</label>
+          <select id="sendAfterMinutes">
+            <option value="15">15 دقيقة</option>
+            <option value="30">30 دقيقة</option>
+            <option value="60">ساعة</option>
+            <option value="180">3 ساعات</option>
+            <option value="360">6 ساعات</option>
+            <option value="1440">24 ساعة</option>
+          </select>
+          <small>30 دقيقة مناسبة لمعظم المتاجر.</small>
+        </div>
+
+        <div class="offer-toggle-card">
+          <div>
+            <strong>إضافة خصم للرسالة</strong>
+            <small>اختياري — استخدم كوبونًا موجودًا بالفعل في متجرك.</small>
+          </div>
+
+          <label class="mini-switch" aria-label="تشغيل الخصم">
+            <input id="discountEnabled" type="checkbox">
+            <span></span>
+          </label>
+        </div>
+      </div>
+
+      <div id="discountFields" class="discount-panel hidden">
+        <div class="form-field">
+          <label for="discountType">نوع الخصم</label>
+          <select id="discountType">
+            <option value="percent">نسبة مئوية %</option>
+            <option value="fixed">مبلغ ثابت</option>
+          </select>
+        </div>
+
+        <div class="form-field">
+          <label for="discountValue">قيمة الخصم</label>
+          <input
+            id="discountValue"
+            type="number"
+            min="0"
+            step="0.01"
+            inputmode="decimal"
+            placeholder="10"
           >
-
         </div>
 
-      </section>
+        <div class="form-field coupon-field">
+          <label for="couponCode">كود الخصم</label>
+          <input
+            id="couponCode"
+            type="text"
+            maxlength="50"
+            autocomplete="off"
+            placeholder="مثال: BACK10"
+          >
+          <small>اكتب كود كوبون صالح ومفعّل داخل سلة.</small>
+        </div>
+      </div>
+    </section>
 
+    <section class="card">
+      <div class="card-heading">
+        <div>
+          <span class="step-label">الخطوة 3</span>
+          <h2>أسلوب الرسالة</h2>
+          <p>
+            لا تحتاج لكتابة متغيرات أو روابط. اختر الأسلوب فقط، وسنضيف اسم العميل
+            والمنتجات ورابط إكمال الطلب تلقائيًا.
+          </p>
+        </div>
+      </div>
 
-
-      <!-- ========================================
-           إعدادات الاستعادة
-      ========================================= -->
-
-      <section class="card">
-
-        <div class="card-header">
-
-          <div>
-
-            <h2>
-              إعدادات الاستعادة
-            </h2>
-
-            <p>
-              حدد طريقة إرسال الرسالة والعرض الذي سيصل للعميل.
-            </p>
-
-          </div>
-
-
-          <label class="switch-row">
-
+      <div class="message-layout">
+        <div class="message-options" role="radiogroup" aria-label="أسلوب رسالة WhatsApp">
+          <label class="message-option">
+            <input id="styleFriendly" type="radio" name="messageStyle" value="friendly" checked>
             <span>
-              تشغيل الاستعادة
+              <strong>ودية</strong>
+              <small>طبيعية ومناسبة لمعظم المتاجر</small>
             </span>
-
-            <input
-              id="enabled"
-              type="checkbox"
-            >
-
           </label>
 
-        </div>
+          <label class="message-option">
+            <input id="styleShort" type="radio" name="messageStyle" value="short">
+            <span>
+              <strong>مختصرة</strong>
+              <small>رسالة مباشرة وسريعة</small>
+            </span>
+          </label>
 
+          <label class="message-option">
+            <input id="styleSales" type="radio" name="messageStyle" value="sales">
+            <span>
+              <strong>تسويقية</strong>
+              <small>نبرة أقوى مع دعوة واضحة للشراء</small>
+            </span>
+          </label>
 
-        <div class="form-grid">
-
-
-          <!-- وقت الإرسال -->
-
-          <div class="form-group">
-
-            <label for="sendAfterMinutes">
-              إرسال الرسالة بعد
-            </label>
-
-            <div class="input-with-text">
-
-              <input
-                id="sendAfterMinutes"
-                type="number"
-                min="1"
-                max="10080"
-                step="1"
-                inputmode="numeric"
-              >
-
-              <span>
-                دقيقة
-              </span>
-
+          <div class="auto-data-note">
+            <span class="auto-icon">✓</span>
+            <div>
+              <strong>البيانات تُضاف تلقائيًا</strong>
+              <small>اسم العميل · اسم المتجر · المنتجات · الخصم · رابط إكمال الطلب</small>
             </div>
-
           </div>
-
-
-
-          <!-- تفعيل الخصم -->
-
-          <div class="form-group">
-
-            <label>
-              تقديم خصم للعميل
-            </label>
-
-            <label class="switch-row simple">
-
-              <span>
-                تفعيل الخصم
-              </span>
-
-              <input
-                id="discountEnabled"
-                type="checkbox"
-              >
-
-            </label>
-
-          </div>
-
-
-
-          <!-- نوع الخصم -->
-
-          <div class="form-group">
-
-            <label for="discountType">
-              نوع الخصم
-            </label>
-
-            <select id="discountType">
-
-              <option value="percent">
-                نسبة مئوية %
-              </option>
-
-              <option value="fixed">
-                مبلغ ثابت
-              </option>
-
-            </select>
-
-          </div>
-
-
-
-          <!-- قيمة الخصم -->
-
-          <div class="form-group">
-
-            <label for="discountValue">
-              قيمة الخصم
-            </label>
-
-            <input
-              id="discountValue"
-              type="number"
-              min="0"
-              step="0.01"
-              inputmode="decimal"
-            >
-
-          </div>
-
-
-
-          <!-- كوبون الخصم -->
-
-          <div class="form-group full">
-
-            <label for="couponCode">
-              كود الخصم
-            </label>
-
-            <input
-              id="couponCode"
-              type="text"
-              placeholder="مثال: BACK10"
-              autocomplete="off"
-              spellcheck="false"
-            >
-
-          </div>
-
         </div>
 
-      </section>
-
-
-
-      <!-- ========================================
-           رسالة WhatsApp
-      ========================================= -->
-
-      <section class="card">
-
-        <div class="card-header">
-
-          <div>
-
-            <h2>
-              رسالة WhatsApp
-            </h2>
-
-            <p>
-              يمكنك تعديل نص الرسالة واستخدام المتغيرات المتاحة.
-            </p>
-
+        <div class="preview-card">
+          <div class="preview-head">
+            <div>
+              <strong>معاينة الرسالة</strong>
+              <small>مثال توضيحي قبل الإرسال</small>
+            </div>
+            <span class="preview-badge">WhatsApp</span>
           </div>
 
-        </div>
-
-
-        <div class="variables">
-
-          <span>
-            {customer_name}
-          </span>
-
-          <span>
-            {store_name}
-          </span>
-
-          <span>
-            {products_text}
-          </span>
-
-          <span>
-            {cart_total}
-          </span>
-
-          <span>
-            {currency}
-          </span>
-
-          <span>
-            {coupon_code}
-          </span>
-
-          <span>
-            {discount}
-          </span>
-
-          <span>
-            {offer_line}
-          </span>
-
-          <span>
-            {checkout_url}
-          </span>
-
-        </div>
-
-
-        <textarea
-          id="messageTemplate"
-          rows="11"
-          spellcheck="true"
-        ></textarea>
-
-
-        <div class="preview-box">
-
-          <div class="preview-title">
-            معاينة الرسالة
+          <div class="chat-preview">
+            <div id="messagePreview" class="chat-bubble"></div>
+            <span class="chat-time">الآن ✓✓</span>
           </div>
-
-          <div
-            id="messagePreview"
-            class="message-preview"
-          ></div>
-
         </div>
+      </div>
+    </section>
 
-      </section>
+    <section class="save-bar">
+      <div>
+        <strong id="saveTitle">جاهز للحفظ</strong>
+        <span id="saveStatus">راجع الإعدادات ثم اضغط حفظ.</span>
+      </div>
 
+      <button id="saveBtn" class="btn btn-primary btn-large" type="button">
+        حفظ الإعدادات
+      </button>
+    </section>
+  </main>
 
+  <div id="qrModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="qrModalTitle">
+    <div class="modal-backdrop" data-close-qr></div>
 
-      <!-- ========================================
-           حفظ
-      ========================================= -->
+    <section class="modal-card">
+      <button id="closeQrBtn" class="modal-close" type="button" aria-label="إغلاق">×</button>
 
-      <section class="save-bar">
+      <div class="modal-heading">
+        <span class="qr-icon">▦</span>
+        <div>
+          <h2 id="qrModalTitle">اربط WhatsApp</h2>
+          <p>افتح WhatsApp على جوالك وامسح رمز QR. سنتحقق من الاتصال تلقائيًا.</p>
+        </div>
+      </div>
 
-        <div
-          id="saveStatus"
-          class="save-status"
-          aria-live="polite"
-        ></div>
+      <div class="qr-frame">
+        <div id="qrLoading" class="qr-loading">
+          <span class="spinner"></span>
+          <span>جاري إنشاء رمز QR...</span>
+        </div>
+        <img id="qrImage" class="hidden" alt="رمز QR لربط WhatsApp">
+      </div>
 
-        <button
-          id="saveBtn"
-          type="button"
-          class="btn btn-primary btn-large"
-        >
-          حفظ الإعدادات
+      <div class="qr-steps">
+        <span>1. افتح WhatsApp</span>
+        <span>2. الأجهزة المرتبطة</span>
+        <span>3. ربط جهاز</span>
+      </div>
+
+      <div id="qrStatus" class="qr-status">
+        في انتظار مسح الرمز...
+      </div>
+
+      <div class="modal-actions">
+        <button id="reloadQrBtn" class="btn btn-secondary" type="button">
+          تحديث رمز QR
         </button>
-
-      </section>
-
-
-    </main>
-
+        <button id="checkQrStatusBtn" class="btn btn-primary" type="button">
+          تحقق من الاتصال
+        </button>
+      </div>
+    </section>
   </div>
 
-
-  <!-- ========================================
-       Dashboard JavaScript
-       لا نحمل Salla Embedded SDK هنا
-  ========================================= -->
-
-  <script src="/vendor/salla-embedded-sdk.js"></script>
-
+  <script src="/dashboard.js"></script>
 </body>
-
 </html>
