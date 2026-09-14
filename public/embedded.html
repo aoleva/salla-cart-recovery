@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 
 <head>
@@ -70,16 +70,7 @@
     نوفر Browser shim قبل تحميل SDK.
   -->
 
-  <script>
-    window.process =
-      window.process || {};
-
-    window.process.env =
-      window.process.env || {};
-
-    window.process.env.NODE_ENV =
-      'production';
-  </script>
+  <script src="/embedded-process-shim.js"></script>
 
 
   <!-- Salla Embedded SDK -->
