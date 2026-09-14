@@ -586,4 +586,67 @@ els.connectWhatsappBtn.addEventListener(
 // Start
 // ===============================
 
-loadStore();
+// ===============================
+// Start
+// ===============================
+
+async function startApp() {
+  let embedded = null;
+
+  try {
+    // لو التطبيق مفتوح داخل لوحة سلة
+    if (window.self !== window.top) {
+      embedded =
+        window.Salla?.embedded ||
+        window.salla?.embedded ||
+        null;
+
+      if (embedded) {
+        await embedded.init({
+          debug: true
+        });
+      }
+    }
+
+    // تحميل بيانات المتجر
+    await loadStore();
+
+    // إبلاغ سلة أن الصفحة جاهزة
+    if (embedded) {
+      embedded.page?.setTitle?.(
+        'استعادة السلات المتروكة'
+      );
+
+      embedded.ready();
+
+      embedded.ui
+        ?.loading
+        ?.hide?.();
+    }
+
+  } catch (error) {
+    console.error(
+      'Dashboard startup error:',
+      error
+    );
+
+    setSaveStatus(
+      error.message ||
+      'تعذر تشغيل التطبيق داخل سلة.',
+      true
+    );
+
+    // حتى لو حصل خطأ، نشيل شاشة التحميل
+    try {
+      embedded?.ready?.();
+
+      embedded
+        ?.ui
+        ?.loading
+        ?.hide?.();
+
+    } catch (_) {}
+  }
+}
+
+startApp();

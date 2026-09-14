@@ -29,14 +29,17 @@
         {
           method: 'POST',
 
+          credentials: 'include',
+
           headers: {
             'Content-Type':
               'application/json'
           },
 
-          body: JSON.stringify({
-            token
-          })
+          body:
+            JSON.stringify({
+              token
+            })
         }
       );
 
@@ -50,12 +53,7 @@
       );
     }
 
-    embedded.page?.setTitle?.(
-      'استعادة السلات المتروكة'
-    );
-
-    embedded.ready();
-
+    // لا نعمل ready هنا لأننا سننتقل إلى dashboard
     window.location.replace(
       '/dashboard'
     );
@@ -65,6 +63,12 @@
       'Embedded startup error:',
       error
     );
+
+    // نخفي Skeleton حتى يظهر الخطأ الحقيقي
+    try {
+      embedded.ready();
+      embedded.ui?.loading?.hide?.();
+    } catch (_) {}
 
     document.body.innerHTML =
       `<div style="
