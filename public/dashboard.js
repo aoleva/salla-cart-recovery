@@ -1,39 +1,86 @@
-const $ = (id) => document.getElementById(id);
+const $ = (id) =>
+  document.getElementById(id);
+
+
+// ===================================
+// Elements
+// ===================================
 
 const els = {
-  enabled: $('enabled'),
-  sendAfterMinutes: $('sendAfterMinutes'),
-  discountEnabled: $('discountEnabled'),
-  discountType: $('discountType'),
-  discountValue: $('discountValue'),
-  couponCode: $('couponCode'),
-  messageTemplate: $('messageTemplate'),
+  enabled:
+    $('enabled'),
 
-  saveBtn: $('saveBtn'),
-  saveStatus: $('saveStatus'),
+  sendAfterMinutes:
+    $('sendAfterMinutes'),
 
-  whatsappStatus: $('whatsappStatus'),
-  whatsappPhone: $('whatsappPhone'),
-  connectionBadge: $('connectionBadge'),
+  discountEnabled:
+    $('discountEnabled'),
 
-  connectWhatsappBtn: $('connectWhatsappBtn'),
-  refreshWhatsappBtn: $('refreshWhatsappBtn'),
+  discountType:
+    $('discountType'),
 
-  qrContainer: $('qrContainer'),
-  qrImage: $('qrImage'),
+  discountValue:
+    $('discountValue'),
 
-  messagePreview: $('messagePreview')
+  couponCode:
+    $('couponCode'),
+
+  messageTemplate:
+    $('messageTemplate'),
+
+  saveBtn:
+    $('saveBtn'),
+
+  saveStatus:
+    $('saveStatus'),
+
+  whatsappStatus:
+    $('whatsappStatus'),
+
+  whatsappPhone:
+    $('whatsappPhone'),
+
+  connectionBadge:
+    $('connectionBadge'),
+
+  connectWhatsappBtn:
+    $('connectWhatsappBtn'),
+
+  refreshWhatsappBtn:
+    $('refreshWhatsappBtn'),
+
+  qrContainer:
+    $('qrContainer'),
+
+  qrImage:
+    $('qrImage'),
+
+  messagePreview:
+    $('messagePreview')
 };
 
-let currentStore = null;
+
+let currentStore =
+  null;
+
+let currentQrUrl =
+  null;
 
 
-// ===============================
+// ===================================
 // رسائل الحالة
-// ===============================
+// ===================================
 
-function setSaveStatus(text, isError = false) {
-  els.saveStatus.textContent = text || '';
+function setSaveStatus(
+  text,
+  isError = false
+) {
+  if (!els.saveStatus) {
+    return;
+  }
+
+  els.saveStatus.textContent =
+    text || '';
 
   els.saveStatus.className =
     isError
@@ -42,24 +89,96 @@ function setSaveStatus(text, isError = false) {
 }
 
 
-// ===============================
+// ===================================
+// هل حالة WhatsApp متصلة؟
+// ===================================
+
+function isConnectedStatus(
+  status
+) {
+  const value =
+    String(
+      status || ''
+    ).toLowerCase();
+
+  return (
+    value.includes(
+      'authenticated'
+    ) ||
+    value.includes(
+      'connected'
+    )
+  );
+}
+
+
+// ===================================
 // معاينة الرسالة
-// ===============================
+// ===================================
 
 function updatePreview() {
+  if (
+    !els.messageTemplate ||
+    !els.messagePreview
+  ) {
+    return;
+  }
+
+
   let message =
-    els.messageTemplate.value || '';
+    els.messageTemplate.value ||
+    '';
+
+
+  const discountValue =
+    Number(
+      els.discountValue
+        ?.value ||
+      0
+    );
+
 
   const discountText =
-    els.discountType.value === 'fixed'
-      ? `${els.discountValue.value || 0} ريال`
-      : `${els.discountValue.value || 0}%`;
+    els.discountType
+      ?.value ===
+      'fixed'
+
+      ? `${discountValue} ريال`
+
+      : `${discountValue}%`;
+
+
+  const couponCode =
+    String(
+      els.couponCode
+        ?.value ||
+      ''
+    ).trim();
+
+
+  const discountEnabled =
+    Boolean(
+      els.discountEnabled
+        ?.checked
+    );
+
+
+  const offerLine =
+    discountEnabled &&
+    couponCode
+
+      ? `استخدم كود ${couponCode} واحصل على خصم ${discountText}.`
+
+      : '';
+
 
   const replacements = {
-    '{customer_name}': 'أحمد',
+    '{customer_name}':
+      'أحمد',
 
     '{store_name}':
-      currentStore?.storeName ||
+      currentStore
+        ?.storeName ||
       'متجرك',
 
     '{products_text}':
@@ -72,24 +191,27 @@ function updatePreview() {
       'SAR',
 
     '{coupon_code}':
-      els.couponCode.value ||
-      'BACK10',
+      couponCode,
 
     '{discount}':
       discountText,
 
     '{offer_line}':
-      els.discountEnabled.checked
-        ? `استخدم كود ${els.couponCode.value || 'BACK10'} واحصل على خصم ${discountText}.`
-        : '',
+      offerLine,
 
     '{checkout_url}':
       'https://example.com/cart'
   };
 
+
   for (
-    const [key, value]
-    of Object.entries(replacements)
+    const [
+      key,
+      value
+    ]
+    of Object.entries(
+      replacements
+    )
   ) {
     message =
       message
@@ -97,55 +219,124 @@ function updatePreview() {
         .join(value);
   }
 
+
   els.messagePreview.textContent =
-    message.trim();
+    message
+      .replace(
+        /\n{3,}/g,
+        '\n\n'
+      )
+      .trim();
 }
 
 
-// ===============================
-// تحميل إعدادات المتجر
-// ===============================
+// ===================================
+// تحميل إعدادات المتجر في الصفحة
+// ===================================
 
-function applyStore(store) {
-  currentStore = store;
+function applyStore(
+  store
+) {
+  if (!store) {
+    return;
+  }
+
+
+  currentStore =
+    store;
+
 
   const settings =
-    store.settings || {};
+    store.settings ||
+    {};
 
-  els.enabled.checked =
-    settings.enabled !== false;
 
-  els.sendAfterMinutes.value =
-    settings.sendAfterMinutes ?? 30;
+  if (els.enabled) {
+    els.enabled.checked =
+      settings.enabled !==
+      false;
+  }
 
-  els.discountEnabled.checked =
-    settings.discountEnabled !== false;
 
-  els.discountType.value =
-    settings.discountType ||
-    'percent';
+  if (
+    els.sendAfterMinutes
+  ) {
+    els.sendAfterMinutes.value =
+      settings
+        .sendAfterMinutes ??
+      30;
+  }
 
-  els.discountValue.value =
-    settings.discountValue ?? 10;
 
-  els.couponCode.value =
-    settings.couponCode || '';
+  if (
+    els.discountEnabled
+  ) {
+    els.discountEnabled.checked =
+      settings
+        .discountEnabled !==
+      false;
+  }
 
-  els.messageTemplate.value =
-    settings.messageTemplate || '';
+
+  if (
+    els.discountType
+  ) {
+    els.discountType.value =
+      settings
+        .discountType ||
+      'percent';
+  }
+
+
+  if (
+    els.discountValue
+  ) {
+    els.discountValue.value =
+      settings
+        .discountValue ??
+      10;
+  }
+
+
+  if (
+    els.couponCode
+  ) {
+    els.couponCode.value =
+      settings
+        .couponCode ||
+      '';
+  }
+
+
+  if (
+    els.messageTemplate
+  ) {
+    els.messageTemplate.value =
+      settings
+        .messageTemplate ||
+      '';
+  }
+
 
   updatePreview();
-  applyWhatsappState(store);
+
+  applyWhatsappState(
+    store
+  );
 }
 
 
-// ===============================
+// ===================================
 // حالة WhatsApp
-// ===============================
+// ===================================
 
-function applyWhatsappState(store) {
+function applyWhatsappState(
+  store
+) {
   const whatsapp =
-    store.whatsapp || {};
+    store?.whatsapp ||
+    {};
+
 
   const status =
     String(
@@ -153,191 +344,421 @@ function applyWhatsappState(store) {
       'not_configured'
     ).toLowerCase();
 
-  els.whatsappPhone.textContent =
-    whatsapp.phone
-      ? `الرقم: ${whatsapp.phone}`
-      : '';
 
-  // WhatsApp متصل
   if (
-    status.includes('authenticated') ||
-    status.includes('connected')
+    els.whatsappPhone
   ) {
-    els.whatsappStatus.textContent =
-      'متصل ✅';
+    els.whatsappPhone
+      .textContent =
+        whatsapp.phone
+          ? `الرقم: ${whatsapp.phone}`
+          : '';
+  }
 
-    els.connectionBadge.textContent =
-      'WhatsApp متصل';
 
-    els.connectionBadge.className =
-      'status-badge status-online';
+  // =================================
+  // WhatsApp متصل
+  // =================================
 
-    els.connectWhatsappBtn.textContent =
-      'WhatsApp متصل';
+  if (
+    isConnectedStatus(
+      status
+    )
+  ) {
+    if (
+      els.whatsappStatus
+    ) {
+      els.whatsappStatus
+        .textContent =
+          'متصل ✅';
+    }
 
-    els.connectWhatsappBtn.disabled =
-      true;
 
-    els.qrContainer.classList.add(
-      'hidden'
-    );
+    if (
+      els.connectionBadge
+    ) {
+      els.connectionBadge
+        .textContent =
+          'WhatsApp متصل';
+
+      els.connectionBadge
+        .className =
+          'status-badge status-online';
+    }
+
+
+    if (
+      els.connectWhatsappBtn
+    ) {
+      els.connectWhatsappBtn
+        .textContent =
+          'WhatsApp متصل';
+
+      els.connectWhatsappBtn
+        .disabled =
+          true;
+    }
+
+
+    if (
+      els.qrContainer
+    ) {
+      els.qrContainer
+        .classList
+        .add(
+          'hidden'
+        );
+    }
+
+
+    clearQrUrl();
 
     return;
   }
 
 
-  // UltraMsg مجهز لكن WhatsApp غير متصل
+  // =================================
+  // UltraMsg مجهز لكن غير متصل
+  // =================================
+
   if (
     whatsapp.instanceId &&
     whatsapp.tokenConfigured
   ) {
-    els.whatsappStatus.textContent =
-      'غير متصل';
+    if (
+      els.whatsappStatus
+    ) {
+      els.whatsappStatus
+        .textContent =
+          'غير متصل';
+    }
 
-    els.connectionBadge.textContent =
-      'WhatsApp غير متصل';
 
-    els.connectionBadge.className =
-      'status-badge status-offline';
+    if (
+      els.connectionBadge
+    ) {
+      els.connectionBadge
+        .textContent =
+          'WhatsApp غير متصل';
 
-    els.connectWhatsappBtn.textContent =
-      'ربط WhatsApp';
+      els.connectionBadge
+        .className =
+          'status-badge status-offline';
+    }
 
-    els.connectWhatsappBtn.disabled =
-      false;
+
+    if (
+      els.connectWhatsappBtn
+    ) {
+      els.connectWhatsappBtn
+        .textContent =
+          'ربط WhatsApp';
+
+      els.connectWhatsappBtn
+        .disabled =
+          false;
+    }
+
 
     return;
   }
 
 
-  // لم يتم تجهيز UltraMsg
-  els.whatsappStatus.textContent =
-    'لم يتم تجهيز WhatsApp بعد';
+  // =================================
+  // UltraMsg غير مجهز
+  // =================================
 
-  els.connectionBadge.textContent =
-    'WhatsApp غير مجهز';
+  if (
+    els.whatsappStatus
+  ) {
+    els.whatsappStatus
+      .textContent =
+        'لم يتم تجهيز WhatsApp بعد';
+  }
 
-  els.connectionBadge.className =
-    'status-badge status-offline';
 
-  els.connectWhatsappBtn.textContent =
-    'ربط WhatsApp';
+  if (
+    els.connectionBadge
+  ) {
+    els.connectionBadge
+      .textContent =
+        'WhatsApp غير مجهز';
 
-  els.connectWhatsappBtn.disabled =
-    false;
+    els.connectionBadge
+      .className =
+        'status-badge status-offline';
+  }
+
+
+  if (
+    els.connectWhatsappBtn
+  ) {
+    els.connectWhatsappBtn
+      .textContent =
+        'ربط WhatsApp';
+
+    els.connectWhatsappBtn
+      .disabled =
+        false;
+  }
 }
 
 
-// ===============================
+// ===================================
 // API Helper
-// ===============================
+// ===================================
 
 async function api(
   url,
   options = {}
 ) {
+  const headers = {
+    ...(options.body
+      ? {
+          'Content-Type':
+            'application/json'
+        }
+      : {}),
+
+    ...(options.headers ||
+      {})
+  };
+
+
   const response =
     await fetch(
       url,
       {
-        headers: {
-          'Content-Type':
-            'application/json',
+        ...options,
 
-          ...(options.headers || {})
-        },
+        headers,
 
-        ...options
+        credentials:
+          'include',
+
+        cache:
+          'no-store'
       }
     );
 
-  let data = null;
 
-  try {
-    data =
-      await response.json();
-  } catch (_) {}
+  const text =
+    await response.text();
+
+
+  let data =
+    null;
+
+
+  if (text) {
+    try {
+      data =
+        JSON.parse(
+          text
+        );
+
+    } catch (_) {
+      data = {
+        message:
+          text
+      };
+    }
+  }
+
 
   if (!response.ok) {
-    throw new Error(
+    const message =
       data?.message ||
       data?.error ||
-      `HTTP ${response.status}`
+      `HTTP ${response.status}`;
+
+
+    throw new Error(
+      message
     );
   }
+
 
   return data;
 }
 
 
-// ===============================
+// ===================================
 // تحميل بيانات المتجر
-// ===============================
+// ===================================
 
 async function loadStore() {
-  try {
-    const result =
-      await api('/api/store');
-
-    applyStore(
-      result.store
+  const result =
+    await api(
+      '/api/store'
     );
 
-  } catch (error) {
-    setSaveStatus(
-      error.message,
-      true
+
+  if (!result?.store) {
+    throw new Error(
+      'لم يتم العثور على بيانات المتجر.'
     );
   }
+
+
+  applyStore(
+    result.store
+  );
+
+
+  return result.store;
 }
 
 
-// ===============================
+// ===================================
+// التحقق من الإعدادات
+// ===================================
+
+function validateSettings() {
+  const sendAfterMinutes =
+    Number(
+      els.sendAfterMinutes
+        ?.value
+    );
+
+
+  if (
+    !Number.isFinite(
+      sendAfterMinutes
+    ) ||
+    sendAfterMinutes < 1 ||
+    sendAfterMinutes > 10080
+  ) {
+    throw new Error(
+      'مدة الإرسال يجب أن تكون بين دقيقة و10080 دقيقة.'
+    );
+  }
+
+
+  const discountValue =
+    Number(
+      els.discountValue
+        ?.value
+    );
+
+
+  if (
+    !Number.isFinite(
+      discountValue
+    ) ||
+    discountValue < 0
+  ) {
+    throw new Error(
+      'قيمة الخصم غير صحيحة.'
+    );
+  }
+
+
+  if (
+    els.discountType
+      ?.value ===
+      'percent' &&
+    discountValue > 100
+  ) {
+    throw new Error(
+      'نسبة الخصم لا يمكن أن تتجاوز 100%.'
+    );
+  }
+
+
+  const messageTemplate =
+    String(
+      els.messageTemplate
+        ?.value ||
+      ''
+    ).trim();
+
+
+  if (!messageTemplate) {
+    throw new Error(
+      'نص رسالة WhatsApp لا يمكن أن يكون فارغًا.'
+    );
+  }
+
+
+  return {
+    sendAfterMinutes,
+    discountValue,
+    messageTemplate
+  };
+}
+
+
+// ===================================
 // حفظ إعدادات الاستعادة
-// ===============================
+// ===================================
 
 async function saveSettings() {
-  els.saveBtn.disabled = true;
+  if (
+    els.saveBtn
+  ) {
+    els.saveBtn.disabled =
+      true;
+  }
+
 
   setSaveStatus(
     'جاري الحفظ...'
   );
 
+
   try {
+    const validated =
+      validateSettings();
+
+
     const payload = {
       enabled:
-        els.enabled.checked,
+        Boolean(
+          els.enabled
+            ?.checked
+        ),
 
       sendAfterMinutes:
-        Number(
-          els.sendAfterMinutes.value ||
-          30
-        ),
+        validated
+          .sendAfterMinutes,
 
       discountEnabled:
-        els.discountEnabled.checked,
-
-      discountType:
-        els.discountType.value,
-
-      discountValue:
-        Number(
-          els.discountValue.value ||
-          0
+        Boolean(
+          els.discountEnabled
+            ?.checked
         ),
 
+      discountType:
+        els.discountType
+          ?.value ===
+          'fixed'
+            ? 'fixed'
+            : 'percent',
+
+      discountValue:
+        validated
+          .discountValue,
+
       couponCode:
-        els.couponCode.value.trim(),
+        String(
+          els.couponCode
+            ?.value ||
+          ''
+        ).trim(),
 
       messageTemplate:
-        els.messageTemplate.value
+        validated
+          .messageTemplate
     };
+
 
     const result =
       await api(
         '/api/settings',
         {
-          method: 'PUT',
+          method:
+            'PUT',
 
           body:
             JSON.stringify(
@@ -346,37 +767,57 @@ async function saveSettings() {
         }
       );
 
-    applyStore(
-      result.store
-    );
+
+    if (
+      result?.store
+    ) {
+      applyStore(
+        result.store
+      );
+    }
+
 
     setSaveStatus(
       'تم حفظ الإعدادات بنجاح ✅'
     );
 
+
   } catch (error) {
     setSaveStatus(
-      error.message,
+      error?.message ||
+      'تعذر حفظ الإعدادات.',
       true
     );
 
+
   } finally {
-    els.saveBtn.disabled =
-      false;
+    if (
+      els.saveBtn
+    ) {
+      els.saveBtn.disabled =
+        false;
+    }
   }
 }
 
 
-// ===============================
+// ===================================
 // تحديث حالة WhatsApp
-// ===============================
+// ===================================
 
 async function refreshWhatsapp() {
-  els.refreshWhatsappBtn.disabled =
-    true;
+  if (
+    els.refreshWhatsappBtn
+  ) {
+    els.refreshWhatsappBtn
+      .disabled =
+        true;
 
-  els.refreshWhatsappBtn.textContent =
-    'جاري التحديث...';
+    els.refreshWhatsappBtn
+      .textContent =
+        'جاري التحديث...';
+  }
+
 
   try {
     const result =
@@ -384,69 +825,132 @@ async function refreshWhatsapp() {
         '/api/whatsapp/status'
       );
 
-    applyStore(
-      result.store
-    );
+
+    if (
+      result?.store
+    ) {
+      applyStore(
+        result.store
+      );
+    }
+
 
     setSaveStatus(
       'تم تحديث حالة WhatsApp ✅'
     );
 
+
   } catch (error) {
     setSaveStatus(
-      error.message,
+      error?.message ||
+      'تعذر تحديث حالة WhatsApp.',
       true
     );
 
-  } finally {
-    els.refreshWhatsappBtn.disabled =
-      false;
 
-    els.refreshWhatsappBtn.textContent =
-      'تحديث الحالة';
+  } finally {
+    if (
+      els.refreshWhatsappBtn
+    ) {
+      els.refreshWhatsappBtn
+        .disabled =
+          false;
+
+      els.refreshWhatsappBtn
+        .textContent =
+          'تحديث الحالة';
+    }
   }
 }
 
 
-// ===============================
+// ===================================
+// تنظيف QR URL القديم
+// ===================================
+
+function clearQrUrl() {
+  if (
+    currentQrUrl
+  ) {
+    URL.revokeObjectURL(
+      currentQrUrl
+    );
+
+    currentQrUrl =
+      null;
+  }
+
+
+  if (
+    els.qrImage
+  ) {
+    els.qrImage.removeAttribute(
+      'src'
+    );
+  }
+}
+
+
+// ===================================
 // ربط WhatsApp بالـ QR
-// ===============================
+// ===================================
 
 async function connectWhatsapp() {
-  els.connectWhatsappBtn.disabled =
-    true;
+  if (
+    els.connectWhatsappBtn
+  ) {
+    els.connectWhatsappBtn
+      .disabled =
+        true;
+
+    els.connectWhatsappBtn
+      .textContent =
+        'جاري التحميل...';
+  }
+
 
   setSaveStatus(
-    'جاري طلب QR...'
+    'جاري التحقق من WhatsApp...'
   );
 
+
   try {
-    // نتأكد الأول إن الرقم مش متصل أصلًا
+
+    // =================================
+    // أولًا نتأكد إنه مش متصل بالفعل
+    // =================================
+
     try {
       const statusResult =
         await api(
           '/api/whatsapp/status'
         );
 
+
       const currentStatus =
         String(
-          statusResult.store
+          statusResult
+            ?.store
             ?.whatsapp
             ?.lastStatus ||
           ''
         ).toLowerCase();
 
+
       if (
-        currentStatus.includes(
-          'authenticated'
-        ) ||
-        currentStatus.includes(
-          'connected'
+        isConnectedStatus(
+          currentStatus
         )
       ) {
-        applyStore(
-          statusResult.store
-        );
+        if (
+          statusResult
+            ?.store
+        ) {
+          applyStore(
+            statusResult.store
+          );
+        }
+
 
         setSaveStatus(
           'WhatsApp متصل بالفعل ✅'
@@ -455,90 +959,172 @@ async function connectWhatsapp() {
         return;
       }
 
-    } catch (_) {
-      // نكمل لمحاولة جلب QR
+    } catch (error) {
+      console.warn(
+        'WhatsApp status check failed:',
+        error?.message
+      );
     }
+
+
+    // =================================
+    // طلب QR
+    // =================================
+
+    setSaveStatus(
+      'جاري طلب QR...'
+    );
 
 
     const response =
       await fetch(
-        '/api/whatsapp/qr'
+        '/api/whatsapp/qr',
+        {
+          method:
+            'GET',
+
+          credentials:
+            'include',
+
+          cache:
+            'no-store'
+        }
       );
+
 
     if (!response.ok) {
       let errorMessage =
         'تعذر تحميل QR';
 
-      try {
-        const data =
-          await response.json();
 
-        errorMessage =
-          data.message ||
-          errorMessage;
+      try {
+        const text =
+          await response.text();
+
+
+        if (text) {
+          try {
+            const data =
+              JSON.parse(
+                text
+              );
+
+            errorMessage =
+              data?.message ||
+              data?.error ||
+              errorMessage;
+
+          } catch (_) {
+            errorMessage =
+              text;
+          }
+        }
 
       } catch (_) {}
+
 
       throw new Error(
         errorMessage
       );
     }
 
+
     const blob =
       await response.blob();
 
+
     if (
+      !blob.type ||
       !blob.type.startsWith(
         'image/'
       )
     ) {
       throw new Error(
-        'UltraMsg لم يرجع صورة QR صالحة'
+        'UltraMsg لم يرجع صورة QR صالحة.'
       );
     }
 
-    const url =
+
+    clearQrUrl();
+
+
+    currentQrUrl =
       URL.createObjectURL(
         blob
       );
 
-    els.qrImage.src =
-      url;
 
-    els.qrContainer.classList.remove(
-      'hidden'
-    );
+    if (
+      els.qrImage
+    ) {
+      els.qrImage.src =
+        currentQrUrl;
+    }
+
+
+    if (
+      els.qrContainer
+    ) {
+      els.qrContainer
+        .classList
+        .remove(
+          'hidden'
+        );
+    }
+
 
     setSaveStatus(
       'امسح QR من WhatsApp ثم اضغط تحديث الحالة.'
     );
 
+
   } catch (error) {
     setSaveStatus(
-      error.message,
+      error?.message ||
+      'تعذر ربط WhatsApp.',
       true
     );
 
+
   } finally {
     const connected =
-      els.connectionBadge.classList.contains(
-        'status-online'
-      );
+      els.connectionBadge
+        ?.classList
+        .contains(
+          'status-online'
+        );
 
-    els.connectWhatsappBtn.disabled =
-      connected;
 
-    if (!connected) {
-      els.connectWhatsappBtn.textContent =
-        'ربط WhatsApp';
+    if (
+      els.connectWhatsappBtn
+    ) {
+      els.connectWhatsappBtn
+        .disabled =
+          Boolean(
+            connected
+          );
+
+
+      if (
+        connected
+      ) {
+        els.connectWhatsappBtn
+          .textContent =
+            'WhatsApp متصل';
+
+      } else {
+        els.connectWhatsappBtn
+          .textContent =
+            'ربط WhatsApp';
+      }
     }
   }
 }
 
 
-// ===============================
+// ===================================
 // تحديث المعاينة تلقائيًا
-// ===============================
+// ===================================
 
 [
   els.enabled,
@@ -548,81 +1134,74 @@ async function connectWhatsapp() {
   els.discountValue,
   els.couponCode,
   els.messageTemplate
-].forEach((element) => {
+]
+  .filter(Boolean)
+  .forEach(
+    (element) => {
 
-  element.addEventListener(
-    'input',
-    updatePreview
-  );
-
-  element.addEventListener(
-    'change',
-    updatePreview
-  );
-});
-
-
-// ===============================
-// Buttons
-// ===============================
-
-els.saveBtn.addEventListener(
-  'click',
-  saveSettings
-);
-
-els.refreshWhatsappBtn.addEventListener(
-  'click',
-  refreshWhatsapp
-);
-
-els.connectWhatsappBtn.addEventListener(
-  'click',
-  connectWhatsapp
-);
-
-
-// ===============================
-// Start
-// ===============================
-
-// ===============================
-// Start
-// ===============================
-
-async function startApp() {
-  let embedded = null;
-
-  try {
-    // لو التطبيق مفتوح داخل لوحة سلة
-    if (window.self !== window.top) {
-      embedded =
-        window.Salla?.embedded ||
-        window.salla?.embedded ||
-        null;
-
-      if (embedded) {
-        await embedded.init({
-          debug: true
-        });
-      }
-    }
-
-    // تحميل بيانات المتجر
-    await loadStore();
-
-    // إبلاغ سلة أن الصفحة جاهزة
-    if (embedded) {
-      embedded.page?.setTitle?.(
-        'استعادة السلات المتروكة'
+      element.addEventListener(
+        'input',
+        updatePreview
       );
 
-      embedded.ready();
 
-      embedded.ui
-        ?.loading
-        ?.hide?.();
+      element.addEventListener(
+        'change',
+        updatePreview
+      );
     }
+  );
+
+
+// ===================================
+// Buttons
+// ===================================
+
+els.saveBtn
+  ?.addEventListener(
+    'click',
+    saveSettings
+  );
+
+
+els.refreshWhatsappBtn
+  ?.addEventListener(
+    'click',
+    refreshWhatsapp
+  );
+
+
+els.connectWhatsappBtn
+  ?.addEventListener(
+    'click',
+    connectWhatsapp
+  );
+
+
+// ===================================
+// Start
+// ===================================
+//
+// مهم:
+// لا نشغّل Salla Embedded SDK هنا.
+// المصادقة تتم في /salla/embedded
+// وبعد إنشاء Session نصل للـDashboard.
+// ===================================
+
+async function startApp() {
+  try {
+    setSaveStatus(
+      'جاري تحميل بيانات المتجر...'
+    );
+
+
+    await loadStore();
+
+
+    setSaveStatus(
+      ''
+    );
+
 
   } catch (error) {
     console.error(
@@ -630,23 +1209,30 @@ async function startApp() {
       error
     );
 
+
     setSaveStatus(
-      error.message ||
-      'تعذر تشغيل التطبيق داخل سلة.',
+      error?.message ||
+      'تعذر تحميل بيانات المتجر.',
       true
     );
-
-    // حتى لو حصل خطأ، نشيل شاشة التحميل
-    try {
-      embedded?.ready?.();
-
-      embedded
-        ?.ui
-        ?.loading
-        ?.hide?.();
-
-    } catch (_) {}
   }
 }
+
+
+// ===================================
+// تنظيف QR عند مغادرة الصفحة
+// ===================================
+
+window.addEventListener(
+  'beforeunload',
+  () => {
+    clearQrUrl();
+  }
+);
+
+
+// ===================================
+// تشغيل الصفحة
+// ===================================
 
 startApp();

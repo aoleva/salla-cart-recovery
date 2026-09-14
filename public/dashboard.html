@@ -1,11 +1,17 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
+
 <head>
   <meta charset="UTF-8">
 
   <meta
     name="viewport"
     content="width=device-width, initial-scale=1.0"
+  >
+
+  <meta
+    name="robots"
+    content="noindex,nofollow,noarchive"
   >
 
   <title>
@@ -22,9 +28,14 @@
 
   <div class="app-shell">
 
+    <!-- ========================================
+         Header
+    ========================================= -->
+
     <header class="topbar">
 
       <div>
+
         <h1>
           استعادة السلات المتروكة
         </h1>
@@ -32,6 +43,7 @@
         <p>
           استرجع عملاءك تلقائيًا عبر WhatsApp
         </p>
+
       </div>
 
       <div
@@ -47,19 +59,27 @@
     <main class="dashboard">
 
 
-      <!-- حالة واتساب -->
+      <!-- ========================================
+           حالة WhatsApp
+      ========================================= -->
+
       <section class="card">
 
         <div class="card-header">
+
           <div>
+
             <h2>
               ربط WhatsApp
             </h2>
 
             <p>
-              اربط رقم المتجر مرة واحدة وبعدها يتم إرسال رسائل الاستعادة تلقائيًا.
+              اربط رقم المتجر مرة واحدة،
+              وبعدها يتم إرسال رسائل الاستعادة تلقائيًا.
             </p>
+
           </div>
+
         </div>
 
 
@@ -74,16 +94,15 @@
             <div
               id="whatsappStatus"
               class="value"
+              aria-live="polite"
             >
               جاري التحقق...
             </div>
 
-
             <div
               id="whatsappPhone"
               class="muted"
-            >
-            </div>
+            ></div>
 
           </div>
 
@@ -97,7 +116,6 @@
             >
               ربط WhatsApp
             </button>
-
 
             <button
               id="refreshWhatsappBtn"
@@ -136,12 +154,16 @@
 
 
 
-      <!-- إعدادات الاستعادة -->
+      <!-- ========================================
+           إعدادات الاستعادة
+      ========================================= -->
+
       <section class="card">
 
         <div class="card-header">
 
           <div>
+
             <h2>
               إعدادات الاستعادة
             </h2>
@@ -149,6 +171,7 @@
             <p>
               حدد طريقة إرسال الرسالة والعرض الذي سيصل للعميل.
             </p>
+
           </div>
 
 
@@ -171,6 +194,8 @@
         <div class="form-grid">
 
 
+          <!-- وقت الإرسال -->
+
           <div class="form-group">
 
             <label for="sendAfterMinutes">
@@ -184,6 +209,8 @@
                 type="number"
                 min="1"
                 max="10080"
+                step="1"
+                inputmode="numeric"
               >
 
               <span>
@@ -195,6 +222,8 @@
           </div>
 
 
+
+          <!-- تفعيل الخصم -->
 
           <div class="form-group">
 
@@ -219,6 +248,8 @@
 
 
 
+          <!-- نوع الخصم -->
+
           <div class="form-group">
 
             <label for="discountType">
@@ -241,6 +272,8 @@
 
 
 
+          <!-- قيمة الخصم -->
+
           <div class="form-group">
 
             <label for="discountValue">
@@ -252,11 +285,14 @@
               type="number"
               min="0"
               step="0.01"
+              inputmode="decimal"
             >
 
           </div>
 
 
+
+          <!-- كوبون الخصم -->
 
           <div class="form-group full">
 
@@ -269,6 +305,7 @@
               type="text"
               placeholder="مثال: BACK10"
               autocomplete="off"
+              spellcheck="false"
             >
 
           </div>
@@ -279,7 +316,10 @@
 
 
 
-      <!-- نص الرسالة -->
+      <!-- ========================================
+           رسالة WhatsApp
+      ========================================= -->
+
       <section class="card">
 
         <div class="card-header">
@@ -343,6 +383,7 @@
         <textarea
           id="messageTemplate"
           rows="11"
+          spellcheck="true"
         ></textarea>
 
 
@@ -355,8 +396,7 @@
           <div
             id="messagePreview"
             class="message-preview"
-          >
-          </div>
+          ></div>
 
         </div>
 
@@ -364,14 +404,17 @@
 
 
 
-      <!-- حفظ -->
+      <!-- ========================================
+           حفظ
+      ========================================= -->
+
       <section class="save-bar">
 
         <div
           id="saveStatus"
           class="save-status"
-        >
-        </div>
+          aria-live="polite"
+        ></div>
 
         <button
           id="saveBtn"
@@ -389,8 +432,13 @@
   </div>
 
 
+  <!-- ========================================
+       Dashboard JavaScript
+       لا نحمل Salla Embedded SDK هنا
+  ========================================= -->
+
   <script src="/vendor/salla-embedded-sdk.js"></script>
-<script src="/dashboard.js"></script>
 
 </body>
+
 </html>

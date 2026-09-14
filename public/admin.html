@@ -9,6 +9,16 @@
     content="width=device-width, initial-scale=1.0"
   >
 
+  <meta
+    name="robots"
+    content="noindex,nofollow,noarchive"
+  >
+
+  <meta
+    name="referrer"
+    content="no-referrer"
+  >
+
   <title>
     إدارة تطبيق استعادة السلات
   </title>
@@ -22,6 +32,10 @@
 <body>
 
   <div class="app-shell">
+
+    <!-- ========================================
+         Header
+    ========================================= -->
 
     <header class="topbar">
 
@@ -37,7 +51,10 @@
 
       </div>
 
-      <div class="status-badge status-online">
+      <div
+        class="status-badge status-online"
+        aria-label="صفحة الإدارة"
+      >
         Admin
       </div>
 
@@ -47,7 +64,10 @@
     <main class="dashboard">
 
 
-      <!-- Admin Key -->
+      <!-- ========================================
+           Admin Key
+      ========================================= -->
+
       <section class="card">
 
         <div class="card-header">
@@ -59,7 +79,8 @@
             </h2>
 
             <p>
-              هذه الصفحة لك أنت فقط، والتاجر لن يرى UltraMsg Token.
+              هذه الصفحة مخصصة للإدارة فقط،
+              والتاجر لن يرى بيانات UltraMsg السرية.
             </p>
 
           </div>
@@ -75,8 +96,10 @@
 
           <input
             id="adminKey"
+            name="adminKey"
             type="password"
-            autocomplete="current-password"
+            autocomplete="off"
+            spellcheck="false"
             placeholder="أدخل Admin Key"
           >
 
@@ -109,8 +132,10 @@
             المتاجر
           </h3>
 
-          <div id="storesList">
-          </div>
+          <div
+            id="storesList"
+            aria-live="polite"
+          ></div>
 
         </div>
 
@@ -118,7 +143,10 @@
 
 
 
-      <!-- تجهيز UltraMsg -->
+      <!-- ========================================
+           تجهيز UltraMsg
+      ========================================= -->
+
       <section class="card">
 
         <div class="card-header">
@@ -130,7 +158,8 @@
             </h2>
 
             <p>
-              أدخل بيانات UltraMsg الخاصة بالمتجر مرة واحدة، وبعدها التاجر يربط جواله بالـQR.
+              أدخل بيانات UltraMsg الخاصة بالمتجر مرة واحدة،
+              وبعدها يستطيع التاجر ربط WhatsApp من خلال QR.
             </p>
 
           </div>
@@ -141,6 +170,8 @@
         <div class="form-grid">
 
 
+          <!-- Merchant ID -->
+
           <div class="form-group">
 
             <label for="merchantId">
@@ -149,12 +180,18 @@
 
             <input
               id="merchantId"
+              name="merchantId"
               type="text"
+              inputmode="numeric"
+              autocomplete="off"
+              spellcheck="false"
               placeholder="مثال: 123456789"
             >
 
           </div>
 
+
+          <!-- UltraMsg Instance -->
 
           <div class="form-group">
 
@@ -164,12 +201,18 @@
 
             <input
               id="instanceId"
+              name="instanceId"
               type="text"
+              inputmode="numeric"
+              autocomplete="off"
+              spellcheck="false"
               placeholder="مثال: 189061"
             >
 
           </div>
 
+
+          <!-- UltraMsg Token -->
 
           <div class="form-group full">
 
@@ -179,8 +222,10 @@
 
             <input
               id="token"
+              name="token"
               type="password"
               autocomplete="off"
+              spellcheck="false"
               placeholder="Token"
             >
 
@@ -205,9 +250,14 @@
         </div>
 
 
+        <!-- ========================================
+             Result
+        ========================================= -->
+
         <div
           id="result"
           class="preview-box hidden"
+          aria-live="polite"
         >
 
           <div class="preview-title">
@@ -233,6 +283,10 @@
 
   </div>
 
+
+  <!-- ========================================
+       Admin JavaScript
+  ========================================= -->
 
   <script src="/admin.js"></script>
 

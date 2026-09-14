@@ -1,5 +1,6 @@
 require('dotenv').config();
 
+const crypto = require('crypto');
 const path = require('path');
 const express = require('express');
 const helmet = require('helmet');
@@ -10,14 +11,12 @@ const {
   introspectEmbeddedToken,
   getUserInfo
 } = require('./lib/salla');
-
 const {
   getStatus,
   getMe,
   getQrImage,
   logout
 } = require('./lib/ultramsg');
-
 const {
   getStore,
   ensureStore,
@@ -26,7 +25,6 @@ const {
   scheduleJob,
   cancelCartJobs
 } = require('./lib/state');
-
 const {
   startWorker,
   cartIdFrom,
@@ -34,19 +32,16 @@ const {
 } = require('./lib/recovery');
 
 const app = express();
-
-const PORT =
-  Number(process.env.PORT) || 3000;
+const PORT = Number(process.env.PORT) || 3000;
 
 
 // ========================================
-// التحقق من إعدادات Production
+// Environment
 // ========================================
 
 function validateEnvironment() {
   const isProduction =
-    String(process.env.NODE_ENV)
-      .toLowerCase() === 'production';
+    String(process.env.NODE_ENV || '').toLowerCase() === 'production';
 
   if (!isProduction) {
     return;
@@ -56,31 +51,29 @@ function validateEnvironment() {
     'SALLA_APP_ID',
     'SESSION_SECRET',
     'APP_ENCRYPTION_KEY',
-    'ADMIN_KEY'
+    'ADMIN_KEY',
+    'WEBHOOK_SECRET'
   ];
 
-  const missing =
-    required.filter(
-      (key) =>
-        !String(
-          process.env[key] || ''
-        ).trim()
-    );
+  const missing = required.filter(
+    (key) => !String(process.env[key] || '').trim()
+  );
+
+  const encryptionKey =
+    String(process.env.APP_ENCRYPTION_KEY || '').trim();
 
   const badEncryptionKey =
-    !/^[a-fA-F0-9]{64}$/.test(
-      String(
-        process.env.APP_ENCRYPTION_KEY ||
-        ''
-      )
-    );
+    !/^[a-fA-F0-9]{64}$/.test(encryptionKey);
 
-  if (
-    missing.length ||
-    badEncryptionKey
-  ) {
+  if (missing.length) {
     throw new Error(
-      'Production environment is not configured safely'
+      `Missing production environment variables: ${missing.join(', ')}`
+    );
+  }
+
+  if (badEncryptionKey) {
+    throw new Error(
+      'APP_ENCRYPTION_KEY must be exactly 64 hexadecimal characters.'
     );
   }
 }
@@ -89,7 +82,130 @@ validateEnvironment();
 
 
 // ========================================
-// إعداد Express
+// Helpers
+// ========================================
+
+function safeEqual(left, right) {
+  const a = Buffer.from(String(left ?? ''), 'utf8');
+  const b = Buffer.from(String(right ?? ''), 'utf8');
+
+  if (a.length !== b.length) {
+    return false;
+  }
+
+  return crypto.timingSafeEqual(a, b);
+}
+
+function publicStore(store) {
+  if (!store) {
+    return null;
+  }
+
+  return {
+    merchantId: String(store.merchantId || ''),
+    storeName: String(store.storeName || ''),
+    storeDomain: String(store.storeDomain || ''),
+    active: store.active !== false,
+    settings: store.settings || {},
+    whatsapp: {
+      instanceId: String(store.whatsapp?.instanceId || ''),
+      phone: String(store.whatsapp?.phone || ''),
+      lastStatus: String(
+        store.whatsapp?.lastStatus || 'not_configured'
+      ),
+      tokenConfigured: Boolean(store.whatsapp?.tokenEnc)
+    }
+  };
+}
+
+function getMerchant(payload) {
+  const raw =
+    payload?.merchant ??
+    payload?.merchant_id ??
+    payload?.data?.merchant ??
+    payload?.data?.merchant_id ??
+    null;
+
+  if (raw === null || raw === undefined || raw === '') {
+    return null;
+  }
+
+  if (typeof raw === 'object') {
+    const nested =
+      raw.id ??
+      raw.merchant_id ??
+      raw.merchantId ??
+      null;
+
+    return nested === null || nested === undefined
+      ? null
+      : String(nested);
+  }
+
+  return String(raw);
+}
+
+function normalizeUltraMsgStatus(statusRaw) {
+  const accountStatus =
+    statusRaw?.status?.accountStatus ??
+    statusRaw?.accountStatus ??
+    null;
+
+  let mainStatus = '';
+  let subStatus = '';
+
+  if (accountStatus && typeof accountStatus === 'object') {
+    mainStatus =
+      accountStatus.status ??
+      accountStatus.state ??
+      '';
+
+    subStatus =
+      accountStatus.substatus ??
+      accountStatus.subStatus ??
+      '';
+  } else if (accountStatus !== null && accountStatus !== undefined) {
+    mainStatus = accountStatus;
+  } else if (typeof statusRaw?.status === 'string') {
+    mainStatus = statusRaw.status;
+  }
+
+  return `${mainStatus || ''} ${subStatus || ''}`
+    .trim()
+    .toLowerCase();
+}
+
+function isWhatsappConnected(status) {
+  const value = String(status || '').toLowerCase();
+
+  return (
+    value.includes('authenticated') ||
+    value.includes('connected')
+  );
+}
+
+function extractErrorMessage(error, fallback = 'Unexpected error') {
+  const value =
+    error?.response?.data?.message ??
+    error?.response?.data?.error ??
+    error?.response?.data ??
+    error?.message ??
+    fallback;
+
+  if (typeof value === 'string') {
+    return value;
+  }
+
+  try {
+    return JSON.stringify(value);
+  } catch (_) {
+    return fallback;
+  }
+}
+
+
+// ========================================
+// Express / Security
 // ========================================
 
 app.disable('x-powered-by');
@@ -100,18 +216,16 @@ app.use(
 
     contentSecurityPolicy: {
       useDefaults: true,
-
       directives: {
+        scriptSrc: ["'self'"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        imgSrc: ["'self'", 'data:', 'blob:'],
+        connectSrc: ["'self'"],
         frameAncestors: [
           "'self'",
+          'https://salla.sa',
           'https://*.salla.sa',
           'https://s.salla.sa'
-        ],
-
-        imgSrc: [
-          "'self'",
-          'data:',
-          'blob:'
         ]
       }
     }
@@ -126,87 +240,21 @@ app.use(
 
 app.use(
   express.urlencoded({
-    extended: false
+    extended: false,
+    limit: '512kb'
   })
 );
 
-app.use(
-  express.static(
-    path.join(
-      __dirname,
-      'public'
-    )
-  )
-);
-
-
-// منع Cache في الصفحات الحساسة
-app.use(
-  [
-    '/dashboard',
-    '/admin',
-    '/api',
-    '/admin/api'
-  ],
-
-  (req, res, next) => {
-    res.set(
-      'Cache-Control',
-      'no-store'
-    );
-
-    next();
-  }
-);
-
 
 // ========================================
-// الصفحة الرئيسية
+// Salla Embedded SDK browser bundle
 // ========================================
 
-app.get('/', (req, res) => {
-  res.json({
-    status: 'success',
-    service:
-      'Salla Cart Recovery v2',
-    message:
-      'Server is running'
-  });
-});
-
-
-// ========================================
-// Health Check
-// ========================================
-
-app.get(
-  '/health',
-  (req, res) => {
-    res.json({
-      status: 'healthy',
-
-      uptime:
-        Math.floor(
-          process.uptime()
-        ),
-
-      timestamp:
-        new Date()
-          .toISOString()
-    });
-  }
-);
-
-
-// ========================================
-// دخول التطبيق من داخل Salla
-// ========================================
-
-// تقديم نسخة المتصفح من Salla Embedded SDK
 app.get(
   '/vendor/salla-embedded-sdk.js',
-
   (req, res) => {
+    res.set('Cache-Control', 'public, max-age=3600');
+
     res.sendFile(
       path.join(
         __dirname,
@@ -222,129 +270,162 @@ app.get(
 );
 
 
-// الصفحة المضمنة داخل لوحة سلة
-app.get(
-  '/salla/embedded',
+// ========================================
+// Static files
+// ========================================
 
-  (req, res) => {
-    res.set(
-      'Cache-Control',
-      'no-store'
-    );
+app.use(
+  express.static(
+    path.join(__dirname, 'public'),
+    {
+      index: false
+    }
+  )
+);
 
-    res.sendFile(
-      path.join(
-        __dirname,
-        'public',
-        'embedded.html'
-      )
-    );
+
+// ========================================
+// No-cache for sensitive routes
+// ========================================
+
+app.use(
+  [
+    '/salla/embedded',
+    '/dashboard',
+    '/admin',
+    '/api',
+    '/admin/api'
+  ],
+  (req, res, next) => {
+    res.set('Cache-Control', 'no-store');
+    next();
   }
 );
 
 
-// التحقق من جلسة Salla Embedded وإنشاء Session للتاجر
+// ========================================
+// Home
+// ========================================
+
+app.get('/', (req, res) => {
+  res.json({
+    status: 'success',
+    service: 'Salla Cart Recovery v2',
+    message: 'Server is running'
+  });
+});
+
+
+// ========================================
+// Health
+// ========================================
+
+app.get('/health', (req, res) => {
+  res.json({
+    status: 'healthy',
+    uptime: Math.floor(process.uptime()),
+    timestamp: new Date().toISOString()
+  });
+});
+
+
+// ========================================
+// Salla Embedded entry page
+// ========================================
+
+app.get('/salla/embedded', (req, res) => {
+  res.set('Cache-Control', 'no-store');
+
+  res.sendFile(
+    path.join(
+      __dirname,
+      'public',
+      'embedded.html'
+    )
+  );
+});
+
+
+// ========================================
+// Embedded token -> local merchant session
+// ========================================
+
 app.post(
   '/api/embedded/login',
-
   async (req, res) => {
     try {
       const token =
-        String(
-          req.body?.token || ''
-        ).trim();
+        String(req.body?.token || '').trim();
 
       if (!token) {
-        return res
-          .status(400)
-          .json({
-            success: false,
-            message:
-              'Salla embedded token is missing.'
-          });
+        return res.status(400).json({
+          success: false,
+          message: 'Salla embedded token is missing.'
+        });
       }
 
       const identity =
-        await introspectEmbeddedToken(
-          token
-        );
+        await introspectEmbeddedToken(token);
 
       const merchantId =
         identity?.merchant_id;
 
       if (!merchantId) {
-        return res
-          .status(401)
-          .json({
-            success: false,
-            message:
-              'تعذر تحديد المتجر من جلسة سلة.'
-          });
+        return res.status(401).json({
+          success: false,
+          message: 'تعذر تحديد المتجر من جلسة سلة.'
+        });
       }
 
       await ensureStore(
-        merchantId
+        String(merchantId)
       );
 
       setSessionCookie(
         res,
-        merchantId
+        String(merchantId)
       );
 
       return res.json({
         success: true,
-        merchantId:
-          String(
-            merchantId
-          )
+        merchantId: String(merchantId)
       });
 
     } catch (error) {
       console.error(
         '❌ Embedded auth failed:',
-        error.response?.data ||
-        error.message
+        extractErrorMessage(error)
       );
 
-      return res
-        .status(401)
-        .json({
-          success: false,
-          message:
-            'تعذر التحقق من جلسة سلة.'
-        });
+      return res.status(401).json({
+        success: false,
+        message: 'تعذر التحقق من جلسة سلة.'
+      });
     }
   }
 );
 
 
 // ========================================
-// دخول محلي للتجربة فقط
+// Local dev login only
 // ========================================
 
 app.get(
   '/dev/login',
-
   async (req, res) => {
     if (
-      String(
-        process.env.DEV_MODE
-      ).toLowerCase() !== 'true'
+      String(process.env.DEV_MODE || '').toLowerCase() !== 'true'
     ) {
       return res.sendStatus(404);
     }
 
     const merchant =
-      String(
-        req.query.merchant ||
-        'demo'
-      );
+      String(req.query.merchant || 'demo').trim() || 'demo';
 
     await ensureStore(
       merchant,
       {
-        storeName:
-          'Demo Store'
+        storeName: 'Demo Store'
       }
     );
 
@@ -353,9 +434,7 @@ app.get(
       merchant
     );
 
-    res.redirect(
-      '/dashboard'
-    );
+    return res.redirect('/dashboard');
   }
 );
 
@@ -364,500 +443,389 @@ app.get(
 // Dashboard
 // ========================================
 
-app.get(
-  '/dashboard',
-
-  (req, res) => {
-    res.sendFile(
-      path.join(
-        __dirname,
-        'public',
-        'dashboard.html'
-      )
-    );
-  }
-);
+app.get('/dashboard', (req, res) => {
+  res.sendFile(
+    path.join(
+      __dirname,
+      'public',
+      'dashboard.html'
+    )
+  );
+});
 
 
 // ========================================
-// Admin
+// Admin page
 // ========================================
 
-app.get(
-  '/admin',
-
-  (req, res) => {
-    res.sendFile(
-      path.join(
-        __dirname,
-        'public',
-        'admin.html'
-      )
-    );
-  }
-);
+app.get('/admin', (req, res) => {
+  res.sendFile(
+    path.join(
+      __dirname,
+      'public',
+      'admin.html'
+    )
+  );
+});
 
 
 // ========================================
-// بيانات المتجر الحالي
+// Current merchant
 // ========================================
 
 app.get(
   '/api/store',
   sessionMiddleware,
-
   async (req, res) => {
-    const store =
-      getStore(
-        req.merchantId
-      ) ||
-      await ensureStore(
-        req.merchantId
+    try {
+      const store =
+        getStore(req.merchantId) ||
+        await ensureStore(req.merchantId);
+
+      return res.json({
+        success: true,
+        store: publicStore(store)
+      });
+
+    } catch (error) {
+      console.error(
+        '❌ Failed to load merchant store:',
+        extractErrorMessage(error)
       );
 
-    res.json({
-      success: true,
-
-      store: {
-        merchantId:
-          store.merchantId,
-
-        storeName:
-          store.storeName,
-
-        storeDomain:
-          store.storeDomain,
-
-        settings:
-          store.settings,
-
-        whatsapp: {
-          instanceId:
-            store.whatsapp
-              ?.instanceId || '',
-
-          phone:
-            store.whatsapp
-              ?.phone || '',
-
-          lastStatus:
-            store.whatsapp
-              ?.lastStatus ||
-            'not_configured',
-
-          tokenConfigured:
-            Boolean(
-              store.whatsapp
-                ?.tokenEnc
-            )
-        }
-      }
-    });
+      return res.status(500).json({
+        success: false,
+        message: 'تعذر تحميل بيانات المتجر.'
+      });
+    }
   }
 );
 
 
 // ========================================
-// حفظ إعدادات التاجر
+// Save recovery settings
 // ========================================
 
 app.put(
   '/api/settings',
   sessionMiddleware,
-
   async (req, res) => {
-    const input =
-      req.body || {};
+    try {
+      const input = req.body || {};
 
-    const discountType =
-      input.discountType ===
-      'fixed'
-        ? 'fixed'
-        : 'percent';
+      const discountType =
+        input.discountType === 'fixed'
+          ? 'fixed'
+          : 'percent';
 
-    const discountValue =
-      Math.max(
-        0,
-        Number(
-          input.discountValue
-        ) || 0
-      );
-
-    if (
-      discountType ===
-        'percent' &&
-      discountValue > 100
-    ) {
-      return res
-        .status(400)
-        .json({
-          message:
-            'نسبة الخصم لا يمكن أن تتجاوز 100%.'
-        });
-    }
-
-    const sendAfterMinutes =
-      Math.min(
-        10080,
+      const discountValue =
         Math.max(
           0,
-          Math.round(
-            Number(
-              input
-                .sendAfterMinutes
-            ) || 0
-          )
-        )
-      );
+          Number(input.discountValue) || 0
+        );
 
-    const messageTemplate =
-      String(
-        input.messageTemplate ||
-        ''
-      ).trim();
-
-    if (!messageTemplate) {
-      return res
-        .status(400)
-        .json({
-          message:
-            'نص الرسالة مطلوب.'
+      if (
+        discountType === 'percent' &&
+        discountValue > 100
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: 'نسبة الخصم لا يمكن أن تتجاوز 100%.'
         });
-    }
+      }
 
-    const store =
-      await updateStore(
-        req.merchantId,
+      const sendAfterMinutes =
+        Math.min(
+          10080,
+          Math.max(
+            1,
+            Math.round(
+              Number(input.sendAfterMinutes) || 1
+            )
+          )
+        );
 
-        (s) => {
-          s.settings = {
-            ...s.settings,
+      const messageTemplate =
+        String(input.messageTemplate || '').trim();
 
-            enabled:
-              Boolean(
-                input.enabled
-              ),
+      if (!messageTemplate) {
+        return res.status(400).json({
+          success: false,
+          message: 'نص الرسالة مطلوب.'
+        });
+      }
 
-            discountEnabled:
-              Boolean(
-                input
-                  .discountEnabled
-              ),
+      const store =
+        await updateStore(
+          req.merchantId,
+          (s) => {
+            s.settings = {
+              ...s.settings,
+              enabled: Boolean(input.enabled),
+              discountEnabled: Boolean(input.discountEnabled),
+              discountType,
+              discountValue,
+              couponCode:
+                String(input.couponCode || '')
+                  .trim()
+                  .slice(0, 50),
+              sendAfterMinutes,
+              messageTemplate:
+                messageTemplate.slice(0, 4000)
+            };
+          }
+        );
 
-            discountType,
+      return res.json({
+        success: true,
+        store: publicStore(store)
+      });
 
-            discountValue,
-
-            couponCode:
-              String(
-                input
-                  .couponCode ||
-                ''
-              )
-                .trim()
-                .slice(
-                  0,
-                  50
-                ),
-
-            sendAfterMinutes,
-
-            messageTemplate:
-              messageTemplate
-                .slice(
-                  0,
-                  4000
-                )
-          };
-        }
+    } catch (error) {
+      console.error(
+        '❌ Failed to save settings:',
+        extractErrorMessage(error)
       );
 
-    res.json({
-      success: true,
-      store
-    });
+      return res.status(500).json({
+        success: false,
+        message: 'تعذر حفظ الإعدادات.'
+      });
+    }
   }
 );
 
 
 // ========================================
-// حالة WhatsApp
+// WhatsApp status
 // ========================================
 
 app.get(
   '/api/whatsapp/status',
   sessionMiddleware,
-
   async (req, res) => {
     const store =
-      getStore(
-        req.merchantId
-      );
+      getStore(req.merchantId);
+
+    if (!store) {
+      return res.status(404).json({
+        success: false,
+        message: 'المتجر غير موجود.'
+      });
+    }
 
     const provisioned =
       Boolean(
-        store?.whatsapp
-          ?.instanceId &&
-        store?.whatsapp
-          ?.tokenEnc
+        store.whatsapp?.instanceId &&
+        store.whatsapp?.tokenEnc
       );
 
     if (!provisioned) {
       return res.json({
         success: true,
-        store
+        store: publicStore(store)
       });
     }
 
     try {
       const statusRaw =
-        await getStatus(
-          store
-        );
+        await getStatus(store);
 
-      const accountStatus =
-  statusRaw?.status?.accountStatus;
+      const status =
+        normalizeUltraMsgStatus(statusRaw) ||
+        'unknown';
 
-const mainStatus =
-  typeof accountStatus === 'object'
-    ? accountStatus?.status
-    : accountStatus;
-
-const subStatus =
-  typeof accountStatus === 'object'
-    ? accountStatus?.substatus
-    : '';
-
-const status =
-  `${mainStatus || ''} ${subStatus || ''}`
-    .trim()
-    .toLowerCase();
-
-const authenticated =
-  status.includes('authenticated') ||
-  status.includes('connected');
+      const authenticated =
+        isWhatsappConnected(status);
 
       let phone =
-        store.whatsapp.phone ||
-        '';
+        String(store.whatsapp?.phone || '');
 
       if (authenticated) {
         try {
           const me =
-            await getMe(
-              store
-            );
+            await getMe(store);
 
-          phone =
-            me?.id
-              ?._serialized ||
-            me?.id ||
-            me?.phone ||
-            me?.number ||
-            phone;
-
-        } catch (_) {
+          phone = String(
+            me?.id?._serialized ??
+            me?.id ??
+            me?.phone ??
+            me?.number ??
+            phone ??
+            ''
+          );
+        } catch (error) {
+          console.warn(
+            '⚠️ UltraMsg getMe failed:',
+            extractErrorMessage(error)
+          );
         }
       }
 
       const updatedStore =
         await updateStore(
           req.merchantId,
-
           (s) => {
-            s.whatsapp.phone =
-              String(
-                phone || ''
-              );
-
-            s.whatsapp.lastStatus =
-              status ||
-              'unknown';
+            s.whatsapp.phone = phone;
+            s.whatsapp.lastStatus = status;
           }
         );
 
-      res.json({
+      return res.json({
         success: true,
-        store: updatedStore
+        store: publicStore(updatedStore)
       });
 
     } catch (error) {
-      res
-        .status(502)
-        .json({
-          message:
-            error.response
-              ?.data
-              ?.error ||
-            error.message
-        });
+      return res.status(502).json({
+        success: false,
+        message: extractErrorMessage(
+          error,
+          'تعذر التحقق من حالة WhatsApp.'
+        )
+      });
     }
   }
 );
 
 
 // ========================================
-// QR Code
+// WhatsApp QR
 // ========================================
 
 app.get(
   '/api/whatsapp/qr',
   sessionMiddleware,
-
   async (req, res) => {
     const store =
-      getStore(
-        req.merchantId
-      );
+      getStore(req.merchantId);
 
     if (
-      !store?.whatsapp
-        ?.instanceId ||
-      !store?.whatsapp
-        ?.tokenEnc
+      !store?.whatsapp?.instanceId ||
+      !store?.whatsapp?.tokenEnc
     ) {
-      return res
-        .status(409)
-        .json({
-          message:
-            'WhatsApp لم يتم تجهيزه لهذا المتجر بعد.'
-        });
+      return res.status(409).json({
+        success: false,
+        message: 'WhatsApp لم يتم تجهيزه لهذا المتجر بعد.'
+      });
     }
 
     try {
       const response =
-        await getQrImage(
-          store
-        );
+        await getQrImage(store);
 
       const contentType =
-        response.headers[
-          'content-type'
-        ] ||
-        'image/png';
-
-      if (
-        contentType.includes(
-          'application/json'
-        )
-      ) {
-        const text =
-          Buffer
-            .from(
-              response.data
-            )
-            .toString(
-              'utf8'
-            );
-
-        return res
-          .status(
-            response.status
-          )
-          .type(
-            'application/json'
-          )
-          .send(
-            text
-          );
-      }
-
-      res
-        .status(
-          response.status
-        )
-        .set(
-          'Content-Type',
-          contentType
-        )
-        .send(
-          Buffer.from(
-            response.data
-          )
+        String(
+          response.headers?.['content-type'] ||
+          'application/octet-stream'
         );
 
+      if (
+        contentType.includes('application/json') ||
+        contentType.includes('text/')
+      ) {
+        const text =
+          Buffer.from(response.data)
+            .toString('utf8');
+
+        return res
+          .status(response.status)
+          .type(contentType)
+          .send(text);
+      }
+
+      return res
+        .status(response.status)
+        .set('Content-Type', contentType)
+        .set('Cache-Control', 'no-store')
+        .send(Buffer.from(response.data));
+
     } catch (error) {
-      res
-        .status(502)
-        .json({
-          message:
-            error.response
-              ?.data
-              ?.error ||
-            error.message
-        });
+      return res.status(502).json({
+        success: false,
+        message: extractErrorMessage(
+          error,
+          'تعذر تحميل QR.'
+        )
+      });
     }
   }
 );
 
 
 // ========================================
-// فصل WhatsApp
+// WhatsApp logout
 // ========================================
 
 app.post(
   '/api/whatsapp/logout',
   sessionMiddleware,
-
   async (req, res) => {
     try {
       const store =
-        getStore(
-          req.merchantId
-        );
+        getStore(req.merchantId);
+
+      if (
+        !store?.whatsapp?.instanceId ||
+        !store?.whatsapp?.tokenEnc
+      ) {
+        return res.status(409).json({
+          success: false,
+          message: 'WhatsApp لم يتم تجهيزه لهذا المتجر بعد.'
+        });
+      }
 
       const result =
-        await logout(
-          store
+        await logout(store);
+
+      const updatedStore =
+        await updateStore(
+          req.merchantId,
+          (s) => {
+            s.whatsapp.phone = '';
+            s.whatsapp.lastStatus = 'disconnected';
+          }
         );
 
-      res.json({
+      return res.json({
         success: true,
-        result
+        result,
+        store: publicStore(updatedStore)
       });
 
     } catch (error) {
-      res
-        .status(502)
-        .json({
-          message:
-            error.response
-              ?.data
-              ?.error ||
-            error.message
-        });
+      return res.status(502).json({
+        success: false,
+        message: extractErrorMessage(
+          error,
+          'تعذر فصل WhatsApp.'
+        )
+      });
     }
   }
 );
 
 
 // ========================================
-// Admin Protection
+// Admin protection
 // ========================================
 
-function requireAdmin(
-  req,
-  res,
-  next
-) {
+function requireAdmin(req, res, next) {
+  const expected =
+    String(process.env.ADMIN_KEY || '').trim();
+
   const given =
-    String(
-      req.headers[
-        'x-admin-key'
-      ] || ''
-    );
+    String(req.headers['x-admin-key'] || '').trim();
 
   if (
-    !process.env.ADMIN_KEY ||
-    given !==
-      process.env.ADMIN_KEY
+    !expected ||
+    !given ||
+    !safeEqual(given, expected)
   ) {
-    return res
-      .status(401)
-      .json({
-        message:
-          'Admin key is invalid.'
-      });
+    return res.status(401).json({
+      success: false,
+      message: 'Admin key is invalid.'
+    });
   }
 
   next();
@@ -865,238 +833,203 @@ function requireAdmin(
 
 
 // ========================================
-// تجهيز UltraMsg للمتجر
+// Provision UltraMsg for merchant
 // ========================================
 
 app.post(
   '/admin/api/provision-whatsapp',
   requireAdmin,
-
   async (req, res) => {
-    const merchantId =
-      String(
-        req.body
-          ?.merchantId ||
-        ''
-      ).trim();
+    try {
+      const merchantId =
+        String(req.body?.merchantId || '').trim();
 
-    const instanceId =
-      String(
-        req.body
-          ?.instanceId ||
-        ''
-      ).trim();
+      const instanceId =
+        String(req.body?.instanceId || '').trim();
 
-    const token =
-      String(
-        req.body?.token ||
-        ''
-      ).trim();
+      const token =
+        String(req.body?.token || '').trim();
 
-    if (
-      !merchantId ||
-      !instanceId ||
-      !token
-    ) {
-      return res
-        .status(400)
-        .json({
+      if (
+        !merchantId ||
+        !instanceId ||
+        !token
+      ) {
+        return res.status(400).json({
+          success: false,
           message:
             'merchantId, instanceId and token are required.'
         });
-    }
+      }
 
-    await ensureStore(
-      merchantId
-    );
+      await ensureStore(merchantId);
 
-    const store =
-      await updateStore(
-        merchantId,
+      let store =
+        await updateStore(
+          merchantId,
+          (s) => {
+            s.whatsapp.instanceId =
+              instanceId.replace(/^instance/i, '');
 
-        (s) => {
-          s.whatsapp.instanceId =
-            instanceId.replace(
-              /^instance/i,
-              ''
-            );
+            s.whatsapp.tokenEnc =
+              encryptSecret(token);
 
-          s.whatsapp.tokenEnc =
-            encryptSecret(
-              token
-            );
-
-          s.whatsapp.lastStatus =
-            'provisioned';
-        }
-      );
-
-    try {
-      const status =
-        await getStatus(
-          store
+            s.whatsapp.phone = '';
+            s.whatsapp.lastStatus = 'provisioned';
+          }
         );
 
-      res.json({
-        success: true,
-        merchantId,
-        instanceId:
-          store.whatsapp
-            .instanceId,
-        providerStatus:
-          status
-      });
+      try {
+        const statusRaw =
+          await getStatus(store);
 
-    } catch (error) {
-      res
-        .status(400)
-        .json({
+        const normalizedStatus =
+          normalizeUltraMsgStatus(statusRaw) ||
+          'provisioned';
+
+        store =
+          await updateStore(
+            merchantId,
+            (s) => {
+              s.whatsapp.lastStatus = normalizedStatus;
+            }
+          );
+
+        return res.json({
+          success: true,
+          merchantId,
+          instanceId: store.whatsapp.instanceId,
+          providerStatus: statusRaw
+        });
+
+      } catch (error) {
+        return res.status(400).json({
           success: false,
-
           message:
             'تم الحفظ لكن تعذر التحقق من UltraMsg.',
-
-          details:
-            error.response
-              ?.data ||
-            error.message
+          details: extractErrorMessage(error)
         });
+      }
+
+    } catch (error) {
+      console.error(
+        '❌ WhatsApp provisioning failed:',
+        extractErrorMessage(error)
+      );
+
+      return res.status(500).json({
+        success: false,
+        message: 'تعذر تجهيز WhatsApp للمتجر.'
+      });
     }
   }
 );
 
 
 // ========================================
-// عرض المتاجر في Admin
+// Admin stores list
 // ========================================
 
 app.get(
   '/admin/api/stores',
   requireAdmin,
-
   (req, res) => {
-    res.json({
+    const stores =
+      listStores().map(
+        (store) => ({
+          merchantId: String(store.merchantId || ''),
+          storeName: String(store.storeName || ''),
+          active: store.active !== false,
+          whatsappProvisioned:
+            Boolean(
+              store.whatsapp?.instanceId &&
+              store.whatsapp?.tokenEnc
+            )
+        })
+      );
+
+    return res.json({
       success: true,
-
-      stores:
-        listStores()
-          .map(
-            (s) => ({
-              merchantId:
-                s.merchantId,
-
-              storeName:
-                s.storeName,
-
-              active:
-                s.active,
-
-              whatsappProvisioned:
-                Boolean(
-                  s.whatsapp
-                    ?.instanceId &&
-                  s.whatsapp
-                    ?.tokenEnc
-                )
-            })
-          )
+      stores
     });
   }
 );
 
 
 // ========================================
-// الحصول على Merchant ID
+// Salla authorize webhook
 // ========================================
 
-function getMerchant(payload) {
-  return (
-    payload?.merchant ??
-    payload?.data
-      ?.merchant ??
-    null
-  );
-}
-
-
-// ========================================
-// حفظ Authorization من Salla
-// ========================================
-
-async function handleAuthorize(
-  payload
-) {
+async function handleAuthorize(payload) {
   const merchantId =
-    getMerchant(
-      payload
-    );
+    getMerchant(payload);
 
   const accessToken =
-    payload?.data
-      ?.access_token;
+    String(
+      payload?.data?.access_token ||
+      payload?.access_token ||
+      ''
+    ).trim();
 
   if (
     !merchantId ||
     !accessToken
   ) {
+    console.warn(
+      '⚠️ app.store.authorize payload is missing merchant or access token'
+    );
     return;
   }
 
-  await ensureStore(
-    merchantId
-  );
+  await ensureStore(merchantId);
 
   let info = null;
 
   try {
     info =
-      await getUserInfo(
-        accessToken
-      );
+      await getUserInfo(accessToken);
 
   } catch (error) {
     console.warn(
       '⚠️ Could not fetch Salla user info:',
-      error.response?.data ||
-      error.message
+      extractErrorMessage(error)
     );
   }
 
   await updateStore(
     merchantId,
-
     (store) => {
       store.active = true;
 
       store.salla.accessTokenEnc =
-        encryptSecret(
-          accessToken
-        );
+        encryptSecret(accessToken) || '';
 
       store.salla.refreshTokenEnc =
         encryptSecret(
-          payload?.data
-            ?.refresh_token ||
+          payload?.data?.refresh_token ||
+          payload?.refresh_token ||
           ''
-        );
+        ) || '';
 
       store.salla.expiresAt =
-        payload?.data
-          ?.expires ||
+        payload?.data?.expires ??
+        payload?.data?.expires_at ??
+        payload?.expires ??
         null;
 
-      if (
-        info?.merchant?.name
-      ) {
+      const merchantInfo =
+        info?.merchant ||
+        info?.store ||
+        null;
+
+      if (merchantInfo?.name) {
         store.storeName =
-          info.merchant.name;
+          String(merchantInfo.name);
       }
 
-      if (
-        info?.merchant?.domain
-      ) {
+      if (merchantInfo?.domain) {
         store.storeDomain =
-          info.merchant.domain;
+          String(merchantInfo.domain);
       }
     }
   );
@@ -1108,77 +1041,56 @@ async function handleAuthorize(
 
 
 // ========================================
-// جدولة السلة المتروكة
+// Schedule abandoned cart recovery
 // ========================================
 
-async function scheduleAbandonedCart(
-  payload
-) {
+async function scheduleAbandonedCart(payload) {
   const merchantId =
-    getMerchant(
-      payload
-    ) ||
-
+    getMerchant(payload) ||
     (
-      String(
-        process.env.DEV_MODE
-      ).toLowerCase() ===
-      'true'
-
+      String(process.env.DEV_MODE || '').toLowerCase() === 'true'
         ? 'demo'
         : null
     );
 
   if (!merchantId) {
-    return console.warn(
+    console.warn(
       '⚠️ abandoned.cart payload has no merchant id'
     );
+    return;
   }
 
   const store =
-    getStore(
-      merchantId
-    ) ||
-    await ensureStore(
-      merchantId
-    );
+    getStore(merchantId) ||
+    await ensureStore(merchantId);
 
-  if (
-    !store.settings
-      ?.enabled
-  ) {
+  if (!store.settings?.enabled) {
     return;
   }
 
   const data =
-    payload.data || {};
+    payload?.data || {};
 
   const cartId =
-    cartIdFrom(
-      data
-    );
+    cartIdFrom(data);
 
   if (!cartId) {
-    return console.warn(
+    console.warn(
       '⚠️ abandoned.cart payload has no cart id'
     );
+    return;
   }
 
   const minutes =
     Math.max(
-      0,
-      Number(
-        store.settings
-          ?.sendAfterMinutes
-      ) || 0
+      1,
+      Number(store.settings?.sendAfterMinutes) || 30
     );
 
   const runAt =
     new Date(
       Date.now() +
-      minutes *
-      60 *
-      1000
+      minutes * 60 * 1000
     ).toISOString();
 
   const jobId =
@@ -1186,24 +1098,11 @@ async function scheduleAbandonedCart(
 
   await scheduleJob({
     id: jobId,
-
-    merchantId:
-      String(
-        merchantId
-      ),
-
-    cartId:
-      String(
-        cartId
-      ),
-
+    merchantId: String(merchantId),
+    cartId: String(cartId),
     runAt,
-
-    payload:
-      data,
-
-    event:
-      payload.event
+    payload: data,
+    event: payload?.event || 'abandoned.cart'
   });
 
   console.log(
@@ -1213,38 +1112,72 @@ async function scheduleAbandonedCart(
 
 
 // ========================================
-// معالجة Webhook
+// Process Salla webhook payload
 // ========================================
 
-async function processWebhook(
-  payload
-) {
+async function processWebhook(payload) {
   const event =
-    payload?.event;
+    String(payload?.event || '').trim();
+
+  if (!event) {
+    console.warn(
+      '⚠️ Salla webhook payload has no event'
+    );
+    return;
+  }
+
+  if (event === 'app.store.authorize') {
+    return handleAuthorize(payload);
+  }
 
   if (
-    event ===
-    'app.store.authorize'
+    event === 'app.installed' ||
+    event === 'app.updated'
   ) {
-    return handleAuthorize(
-      payload
+    const merchantId =
+      getMerchant(payload);
+
+    if (merchantId) {
+      return ensureStore(merchantId);
+    }
+
+    return;
+  }
+
+  if (event === 'app.uninstalled') {
+    const merchantId =
+      getMerchant(payload);
+
+    if (!merchantId) {
+      return;
+    }
+
+    return updateStore(
+      merchantId,
+      (store) => {
+        store.active = false;
+        store.salla.accessTokenEnc = '';
+        store.salla.refreshTokenEnc = '';
+        store.salla.expiresAt = null;
+      }
     );
   }
 
   if (
-    event ===
-      'app.installed' ||
-    event ===
-      'app.updated'
+    [
+      'app.subscription.started',
+      'app.subscription.renewed'
+    ].includes(event)
   ) {
-    const id =
-      getMerchant(
-        payload
-      );
+    const merchantId =
+      getMerchant(payload);
 
-    if (id) {
-      return ensureStore(
-        id
+    if (merchantId) {
+      return updateStore(
+        merchantId,
+        (store) => {
+          store.active = true;
+        }
       );
     }
 
@@ -1252,147 +1185,77 @@ async function processWebhook(
   }
 
   if (
-    event ===
-    'app.uninstalled'
-  ) {
-    const id =
-      getMerchant(
-        payload
-      );
-
-    if (id) {
-      return updateStore(
-        id,
-
-        (s) => {
-          s.active =
-            false;
-
-          s.salla.accessTokenEnc =
-            '';
-
-          s.salla.refreshTokenEnc =
-            '';
-
-          s.salla.expiresAt =
-            null;
-        }
-      );
-    }
-  }
-
-  if (
-    [
-      'app.subscription.started',
-      'app.subscription.renewed'
-    ].includes(
-      event
-    )
-  ) {
-    const id =
-      getMerchant(
-        payload
-      );
-
-    if (id) {
-      return updateStore(
-        id,
-        (s) => {
-          s.active = true;
-        }
-      );
-    }
-  }
-
-  if (
     [
       'app.subscription.expired',
-      'app.subscription.canceled'
-    ].includes(
-      event
-    )
+      'app.subscription.canceled',
+      'app.subscription.cancelled'
+    ].includes(event)
   ) {
-    const id =
-      getMerchant(
-        payload
-      );
+    const merchantId =
+      getMerchant(payload);
 
-    if (id) {
+    if (merchantId) {
       return updateStore(
-        id,
-        (s) => {
-          s.active = false;
+        merchantId,
+        (store) => {
+          store.active = false;
         }
       );
     }
+
+    return;
   }
 
   if (
-    event ===
-      'abandoned.cart' ||
-    event ===
-      'abandoned.cart.updated' ||
-    event ===
+    [
+      'abandoned.cart',
+      'abandoned.cart.updated',
       'cart.abandoned'
+    ].includes(event)
   ) {
-    return scheduleAbandonedCart(
-      payload
-    );
+    return scheduleAbandonedCart(payload);
   }
 
-  if (
-    event ===
-    'abandoned.cart.purchased'
-  ) {
-    const id =
-      getMerchant(
-        payload
-      );
+  if (event === 'abandoned.cart.purchased') {
+    const merchantId =
+      getMerchant(payload);
 
     const cartId =
       cartIdFrom(
-        payload.data ||
-        {}
+        payload?.data || {}
       );
 
     if (
-      id &&
+      merchantId &&
       cartId
     ) {
       return cancelCartJobs(
-        id,
+        merchantId,
         cartId,
         'purchased'
       );
     }
+
+    return;
   }
 
-  if (
-    event ===
-    'abandoned.cart.status.changed'
-  ) {
-    const id =
-      getMerchant(
-        payload
-      );
+  if (event === 'abandoned.cart.status.changed') {
+    const merchantId =
+      getMerchant(payload);
 
     const data =
-      payload.data || {};
+      payload?.data || {};
 
     const cartId =
-      cartIdFrom(
-        data
-      );
+      cartIdFrom(data);
 
     if (
-      id &&
+      merchantId &&
       cartId &&
-      isPurchasedStatus(
-        data.status
-      )
+      isPurchasedStatus(data.status)
     ) {
       return cancelCartJobs(
-        id,
+        merchantId,
         cartId,
         `status:${data.status}`
       );
@@ -1402,83 +1265,96 @@ async function processWebhook(
 
 
 // ========================================
-// Webhook من Salla
+// Verify Salla webhook token strategy
+// ========================================
+
+function verifySallaWebhook(req) {
+  const expected =
+    String(process.env.WEBHOOK_SECRET || '').trim();
+
+  if (!expected) {
+    return false;
+  }
+
+  const authorization =
+    String(req.headers.authorization || '').trim();
+
+  const withoutBearer =
+    authorization.replace(/^Bearer\s+/i, '').trim();
+
+  return (
+    safeEqual(authorization, expected) ||
+    safeEqual(withoutBearer, expected)
+  );
+}
+
+
+// ========================================
+// Salla webhook endpoint
 // ========================================
 
 app.post(
   '/webhook/salla',
-
   (req, res) => {
+    if (!verifySallaWebhook(req)) {
+      console.warn(
+        '⚠️ Rejected Salla webhook: invalid token'
+      );
+
+      return res.status(401).json({
+        status: 'error',
+        message: 'Invalid webhook token'
+      });
+    }
+
     const payload =
       req.body || {};
 
-    // نرد على سلة بسرعة
-    res
-      .status(200)
-      .json({
-        status:
-          'received'
-      });
+    // Respond quickly to Salla.
+    res.status(200).json({
+      status: 'received'
+    });
 
-    setImmediate(
-      () => {
-        processWebhook(
-          payload
-        ).catch(
-          (error) =>
+    setImmediate(() => {
+      processWebhook(payload)
+        .catch(
+          (error) => {
             console.error(
               '❌ Salla webhook processing error:',
-              error.response
-                ?.data ||
-              error.message
-            )
+              extractErrorMessage(error)
+            );
+          }
         );
-      }
-    );
+    });
   }
 );
 
 
 // ========================================
-// اختبار محلي للسلة المتروكة
+// Local abandoned cart test
 // ========================================
 
 app.post(
   '/dev/test-abandoned',
-
   async (req, res) => {
     if (
-      String(
-        process.env.DEV_MODE
-      ).toLowerCase() !==
-      'true'
+      String(process.env.DEV_MODE || '').toLowerCase() !== 'true'
     ) {
-      return res.sendStatus(
-        404
-      );
+      return res.sendStatus(404);
     }
 
     const merchant =
-      String(
-        req.query.merchant ||
-        'demo'
-      );
+      String(req.query.merchant || 'demo').trim() || 'demo';
 
     const payload = {
-      event:
-        'abandoned.cart',
-
+      event: 'abandoned.cart',
       merchant,
-
-      data:
-        req.body
+      data: req.body || {}
     };
 
-    await processWebhook(
-      payload
-    );
+    await processWebhook(payload);
 
-    res.json({
+    return res.json({
       success: true,
       merchant
     });
@@ -1490,47 +1366,63 @@ app.post(
 // 404
 // ========================================
 
-app.use(
-  (req, res) => {
-    res
-      .status(404)
-      .json({
-        status: 'error',
-        message:
-          'Route not found'
-      });
+app.use((req, res) => {
+  res.status(404).json({
+    status: 'error',
+    message: 'Route not found'
+  });
+});
+
+
+// ========================================
+// Global error handler
+// ========================================
+
+app.use((error, req, res, next) => {
+  console.error(
+    '❌ Unhandled request error:',
+    extractErrorMessage(error)
+  );
+
+  if (res.headersSent) {
+    return next(error);
   }
-);
+
+  return res.status(500).json({
+    status: 'error',
+    message: 'Internal server error'
+  });
+});
 
 
 // ========================================
-// تشغيل السيرفر
+// Start server
 // ========================================
 
-app.listen(
-  PORT,
+app.listen(PORT, () => {
+  console.log(
+    '========================================='
+  );
 
-  () => {
-    console.log(
-      '========================================='
-    );
+  console.log(
+    `🚀 Salla Cart Recovery v2 running on port ${PORT}`
+  );
 
-    console.log(
-      `🚀 Salla Cart Recovery v2 running on port ${PORT}`
-    );
-
+  if (
+    String(process.env.DEV_MODE || '').toLowerCase() === 'true'
+  ) {
     console.log(
       `🧪 Local dashboard: http://localhost:${PORT}/dev/login?merchant=demo`
     );
-
-    console.log(
-      `🔧 Admin: http://localhost:${PORT}/admin`
-    );
-
-    console.log(
-      '========================================='
-    );
-
-    startWorker();
   }
-);
+
+  console.log(
+    `🔧 Admin: http://localhost:${PORT}/admin`
+  );
+
+  console.log(
+    '========================================='
+  );
+
+  startWorker();
+});

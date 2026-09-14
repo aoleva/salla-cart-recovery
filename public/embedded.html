@@ -1,26 +1,90 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
+
 <head>
+
   <meta charset="UTF-8">
+
   <meta
     name="viewport"
     content="width=device-width, initial-scale=1.0"
   >
-  <title>استعادة السلات المتروكة</title>
+
+  <meta
+    name="robots"
+    content="noindex,nofollow,noarchive"
+  >
+
+  <meta
+    name="referrer"
+    content="no-referrer"
+  >
+
+  <title>
+    استعادة السلات المتروكة
+  </title>
+
 </head>
+
 
 <body>
 
-  <div style="
-    font-family:Arial,sans-serif;
-    text-align:center;
-    padding:60px 20px;
-  ">
-    جاري فتح التطبيق...
-  </div>
+  <!-- ========================================
+       شاشة تحميل التطبيق
+  ========================================= -->
+
+  <main
+    id="embeddedApp"
+    style="
+      font-family: Arial, sans-serif;
+      text-align: center;
+      padding: 60px 20px;
+      direction: rtl;
+    "
+  >
+
+    <div
+      id="loadingMessage"
+      style="
+        font-size: 16px;
+        line-height: 1.8;
+      "
+    >
+      جاري فتح التطبيق...
+    </div>
+
+
+    <div
+      id="errorMessage"
+      style="
+        display: none;
+        margin-top: 20px;
+        color: #b42318;
+        font-size: 15px;
+        line-height: 1.8;
+      "
+    ></div>
+
+  </main>
+
+
+  <!-- ========================================
+       Salla Embedded SDK
+
+       مهم:
+       الـ SDK يتم تحميله هنا فقط.
+       لا يتم تحميله داخل dashboard.html
+  ========================================= -->
 
   <script src="/vendor/salla-embedded-sdk.js"></script>
+
+
+  <!-- ========================================
+       تشغيل المصادقة مع سلة
+  ========================================= -->
+
   <script src="/embedded.js"></script>
 
 </body>
+
 </html>

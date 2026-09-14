@@ -1,10 +1,140 @@
-const $ = (id) => document.getElementById(id);
+const $ = (id) =>
+  document.getElementById(id);
 
-function adminHeaders() {
-  return {
-    'Content-Type': 'application/json',
-    'x-admin-key': $('adminKey').value
+
+// ===================================
+// قراءة قيمة الحقل بأمان
+// ===================================
+
+function valueOf(id) {
+  return String(
+    $(id)?.value || ''
+  ).trim();
+}
+
+
+// ===================================
+// Headers الإدارة
+// ===================================
+
+function adminHeaders(
+  includeJson = false
+) {
+  const headers = {
+    'x-admin-key':
+      valueOf('adminKey')
   };
+
+  if (includeJson) {
+    headers[
+      'Content-Type'
+    ] =
+      'application/json';
+  }
+
+  return headers;
+}
+
+
+// ===================================
+// قراءة Response بأمان
+// ===================================
+
+async function readResponse(
+  response
+) {
+  const text =
+    await response.text();
+
+  if (!text) {
+    return {};
+  }
+
+  try {
+    return JSON.parse(text);
+
+  } catch (_) {
+    return {
+      message: text
+    };
+  }
+}
+
+
+// ===================================
+// استخراج رسالة الخطأ
+// ===================================
+
+function responseError(
+  response,
+  data
+) {
+  return (
+    data?.message ||
+    data?.error ||
+    `HTTP ${response.status}`
+  );
+}
+
+
+// ===================================
+// التحقق من Admin Key
+// ===================================
+
+function requireAdminKey() {
+  const key =
+    valueOf('adminKey');
+
+  if (!key) {
+    throw new Error(
+      'أدخل Admin Key أولاً.'
+    );
+  }
+
+  return key;
+}
+
+
+// ===================================
+// عرض نتيجة
+// ===================================
+
+function showResult(
+  value
+) {
+  const resultBox =
+    $('result');
+
+  const resultText =
+    $('resultText');
+
+  if (
+    !resultBox ||
+    !resultText
+  ) {
+    return;
+  }
+
+  resultBox.classList.remove(
+    'hidden'
+  );
+
+  if (
+    typeof value ===
+    'string'
+  ) {
+    resultText.textContent =
+      value;
+
+    return;
+  }
+
+  resultText.textContent =
+    JSON.stringify(
+      value,
+      null,
+      2
+    );
 }
 
 
@@ -12,163 +142,403 @@ function adminHeaders() {
 // عرض المتاجر
 // ===================================
 
-$('loadStores').addEventListener(
-  'click',
-  async () => {
+$('loadStores')
+  ?.addEventListener(
+    'click',
 
-    const area = $('storesArea');
-    const list = $('storesList');
+    async () => {
 
-    area.classList.remove('hidden');
-    list.textContent = 'جاري التحميل...';
+      const button =
+        $('loadStores');
 
-    try {
-      const response = await fetch(
-        '/admin/api/stores',
-        {
-          headers: adminHeaders()
-        }
-      );
+      const area =
+        $('storesArea');
 
-      const data = await response.json();
+      const list =
+        $('storesList');
 
-      if (!response.ok) {
-        throw new Error(
-          data.message ||
-          `HTTP ${response.status}`
-        );
-      }
 
-      if (!data.stores?.length) {
-        list.innerHTML =
-          '<p class="muted">لا توجد متاجر مسجلة حتى الآن.</p>';
-
+      if (
+        !area ||
+        !list
+      ) {
         return;
       }
 
-      list.innerHTML = '';
 
-      data.stores.forEach(
-        (store) => {
+      area.classList.remove(
+        'hidden'
+      );
 
-          const button =
-            document.createElement(
-              'button'
-            );
+      list.textContent =
+        'جاري التحميل...';
 
-          button.type = 'button';
 
-          button.className =
-            'btn btn-secondary';
+      if (button) {
+        button.disabled =
+          true;
+      }
 
-          button.style.cssText =
-            'display:block;width:100%;margin:8px 0;text-align:right';
 
-          button.textContent =
-            `${store.storeName || 'متجر'} — Merchant ${store.merchantId} — ${
-              store.whatsappProvisioned
-                ? 'WhatsApp مجهز'
-                : 'WhatsApp غير مجهز'
-            }`;
+      try {
 
-          button.addEventListener(
-            'click',
-            () => {
-              $('merchantId').value =
-                store.merchantId;
+        requireAdminKey();
 
-              window.scrollTo({
-                top:
-                  document.body.scrollHeight,
 
-                behavior:
-                  'smooth'
-              });
+        const response =
+          await fetch(
+            '/admin/api/stores',
+            {
+              method:
+                'GET',
+
+              headers:
+                adminHeaders(
+                  false
+                ),
+
+              cache:
+                'no-store'
             }
           );
 
-          list.appendChild(
-            button
+
+        const data =
+          await readResponse(
+            response
+          );
+
+
+        if (!response.ok) {
+          throw new Error(
+            responseError(
+              response,
+              data
+            )
           );
         }
-      );
 
-    } catch (error) {
-      list.textContent =
-        error.message;
+
+        const stores =
+          Array.isArray(
+            data?.stores
+          )
+            ? data.stores
+            : [];
+
+
+        if (!stores.length) {
+
+          list.textContent =
+            'لا توجد متاجر مسجلة حتى الآن.';
+
+          return;
+        }
+
+
+        list.textContent =
+          '';
+
+
+        stores.forEach(
+          (store) => {
+
+            const button =
+              document
+                .createElement(
+                  'button'
+                );
+
+
+            button.type =
+              'button';
+
+
+            button.className =
+              'btn btn-secondary';
+
+
+            button.style.cssText =
+              [
+                'display:block',
+                'width:100%',
+                'margin:8px 0',
+                'text-align:right'
+              ].join(';');
+
+
+            const storeName =
+              store?.storeName ||
+              'متجر';
+
+
+            const merchantId =
+              store?.merchantId ||
+              'غير معروف';
+
+
+            const whatsappStatus =
+              store
+                ?.whatsappProvisioned
+
+                ? 'WhatsApp مجهز'
+
+                : 'WhatsApp غير مجهز';
+
+
+            button.textContent =
+              `${storeName} — Merchant ${merchantId} — ${whatsappStatus}`;
+
+
+            button.addEventListener(
+              'click',
+
+              () => {
+
+                const merchantInput =
+                  $('merchantId');
+
+
+                if (
+                  merchantInput
+                ) {
+                  merchantInput.value =
+                    String(
+                      merchantId
+                    );
+                }
+
+
+                window.scrollTo({
+                  top:
+                    document.body
+                      .scrollHeight,
+
+                  behavior:
+                    'smooth'
+                });
+              }
+            );
+
+
+            list.appendChild(
+              button
+            );
+          }
+        );
+
+
+      } catch (error) {
+
+        list.textContent =
+          error?.message ||
+          'حدث خطأ أثناء تحميل المتاجر.';
+
+
+      } finally {
+
+        if (button) {
+          button.disabled =
+            false;
+        }
+      }
     }
-  }
-);
+  );
 
 
 // ===================================
 // تجهيز WhatsApp
 // ===================================
 
-$('save').addEventListener(
-  'click',
-  async () => {
+$('save')
+  ?.addEventListener(
+    'click',
 
-    const resultBox =
-      $('result');
+    async () => {
 
-    const resultText =
-      $('resultText');
+      const button =
+        $('save');
 
-    resultBox.classList.remove(
-      'hidden'
-    );
 
-    resultText.textContent =
-      'جاري التحقق والحفظ...';
+      if (button) {
+        button.disabled =
+          true;
+      }
 
-    try {
-      const response =
-        await fetch(
-          '/admin/api/provision-whatsapp',
+
+      showResult(
+        'جاري التحقق والحفظ...'
+      );
+
+
+      try {
+
+        requireAdminKey();
+
+
+        const merchantId =
+          valueOf(
+            'merchantId'
+          );
+
+
+        const instanceId =
+          valueOf(
+            'instanceId'
+          );
+
+
+        const token =
+          valueOf(
+            'token'
+          );
+
+
+        if (!merchantId) {
+          throw new Error(
+            'أدخل Merchant ID.'
+          );
+        }
+
+
+        if (!instanceId) {
+          throw new Error(
+            'أدخل UltraMsg Instance ID.'
+          );
+        }
+
+
+        if (!token) {
+          throw new Error(
+            'أدخل UltraMsg Token.'
+          );
+        }
+
+
+        const response =
+          await fetch(
+            '/admin/api/provision-whatsapp',
+
+            {
+              method:
+                'POST',
+
+              headers:
+                adminHeaders(
+                  true
+                ),
+
+              cache:
+                'no-store',
+
+              body:
+                JSON.stringify({
+                  merchantId,
+                  instanceId,
+                  token
+                })
+            }
+          );
+
+
+        const data =
+          await readResponse(
+            response
+          );
+
+
+        if (!response.ok) {
+          throw new Error(
+            responseError(
+              response,
+              data
+            )
+          );
+        }
+
+
+        showResult(
+          data
+        );
+
+
+        const tokenInput =
+          $('token');
+
+
+        if (
+          tokenInput
+        ) {
+          tokenInput.value =
+            '';
+        }
+
+
+      } catch (error) {
+
+        showResult(
           {
-            method: 'POST',
+            success: false,
 
-            headers:
-              adminHeaders(),
-
-            body:
-              JSON.stringify({
-                merchantId:
-                  $('merchantId')
-                    .value
-                    .trim(),
-
-                instanceId:
-                  $('instanceId')
-                    .value
-                    .trim(),
-
-                token:
-                  $('token')
-                    .value
-                    .trim()
-              })
+            message:
+              error?.message ||
+              'حدث خطأ أثناء تجهيز WhatsApp.'
           }
         );
 
-      const data =
-        await response.json();
 
-      resultText.textContent =
-        JSON.stringify(
-          data,
-          null,
-          2
-        );
+      } finally {
 
-      if (response.ok) {
-        $('token').value = '';
+        if (button) {
+          button.disabled =
+            false;
+        }
       }
-
-    } catch (error) {
-      resultText.textContent =
-        error.message;
     }
-  }
-);
+  );
+
+
+// ===================================
+// Enter على Admin Key
+// ===================================
+
+$('adminKey')
+  ?.addEventListener(
+    'keydown',
+
+    (event) => {
+
+      if (
+        event.key ===
+        'Enter'
+      ) {
+        event.preventDefault();
+
+        $('loadStores')
+          ?.click();
+      }
+    }
+  );
+
+
+// ===================================
+// Enter على Token
+// ===================================
+
+$('token')
+  ?.addEventListener(
+    'keydown',
+
+    (event) => {
+
+      if (
+        event.key ===
+        'Enter'
+      ) {
+        event.preventDefault();
+
+        $('save')
+          ?.click();
+      }
+    }
+  );
