@@ -202,22 +202,66 @@ app.get(
 // دخول التطبيق من داخل Salla
 // ========================================
 
+// تقديم نسخة المتصفح من Salla Embedded SDK
+app.get(
+  '/vendor/salla-embedded-sdk.js',
+
+  (req, res) => {
+    res.sendFile(
+      path.join(
+        __dirname,
+        'node_modules',
+        '@salla.sa',
+        'embedded-sdk',
+        'dist',
+        'umd',
+        'index.js'
+      )
+    );
+  }
+);
+
+
+// الصفحة المضمنة داخل لوحة سلة
 app.get(
   '/salla/embedded',
+
+  (req, res) => {
+    res.set(
+      'Cache-Control',
+      'no-store'
+    );
+
+    res.sendFile(
+      path.join(
+        __dirname,
+        'public',
+        'embedded.html'
+      )
+    );
+  }
+);
+
+
+// التحقق من جلسة Salla Embedded وإنشاء Session للتاجر
+app.post(
+  '/api/embedded/login',
 
   async (req, res) => {
     try {
       const token =
         String(
-          req.query.token || ''
-        );
+          req.body?.token || ''
+        ).trim();
 
       if (!token) {
         return res
           .status(400)
-          .send(
-            'Salla embedded token is missing.'
-          );
+          .json({
+            success: false,
+            message:
+              'Salla embedded token is missing.'
+          });
       }
 
       const identity =
@@ -225,18 +269,35 @@ app.get(
           token
         );
 
+      const merchantId =
+        identity?.merchant_id;
+
+      if (!merchantId) {
+        return res
+          .status(401)
+          .json({
+            success: false,
+            message:
+              'تعذر تحديد المتجر من جلسة سلة.'
+          });
+      }
+
       await ensureStore(
-        identity.merchant_id
+        merchantId
       );
 
       setSessionCookie(
         res,
-        identity.merchant_id
+        merchantId
       );
 
-      return res.redirect(
-        '/dashboard'
-      );
+      return res.json({
+        success: true,
+        merchantId:
+          String(
+            merchantId
+          )
+      });
 
     } catch (error) {
       console.error(
@@ -247,9 +308,11 @@ app.get(
 
       return res
         .status(401)
-        .send(
-          'تعذر التحقق من جلسة سلة.'
-        );
+        .json({
+          success: false,
+          message:
+            'تعذر التحقق من جلسة سلة.'
+        });
     }
   }
 );

@@ -11,6 +11,7 @@
     "node": ">=18"
   },
   "dependencies": {
+    "@salla.sa/embedded-sdk": "^0.2.6",
     "axios": "^1.12.2",
     "dotenv": "^16.6.1",
     "express": "^4.21.2",
