@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+
+<head>
+  <meta charset="UTF-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  >
+
+  <title>
+    إدارة تطبيق استعادة السلات
+  </title>
+
+  <link
+    rel="stylesheet"
+    href="/styles.css"
+  >
+</head>
+
+<body>
+
+  <div class="app-shell">
+
+    <header class="topbar">
+
+      <div>
+
+        <h1>
+          إدارة التطبيق
+        </h1>
+
+        <p>
+          تجهيز WhatsApp لكل متجر
+        </p>
+
+      </div>
+
+      <div class="status-badge status-online">
+        Admin
+      </div>
+
+    </header>
+
+
+    <main class="dashboard">
+
+
+      <!-- Admin Key -->
+      <section class="card">
+
+        <div class="card-header">
+
+          <div>
+
+            <h2>
+              دخول الإدارة
+            </h2>
+
+            <p>
+              هذه الصفحة لك أنت فقط، والتاجر لن يرى UltraMsg Token.
+            </p>
+
+          </div>
+
+        </div>
+
+
+        <div class="form-group">
+
+          <label for="adminKey">
+            Admin Key
+          </label>
+
+          <input
+            id="adminKey"
+            type="password"
+            autocomplete="current-password"
+            placeholder="أدخل Admin Key"
+          >
+
+        </div>
+
+
+        <div
+          class="actions"
+          style="margin-top:16px"
+        >
+
+          <button
+            id="loadStores"
+            class="btn btn-secondary"
+            type="button"
+          >
+            عرض المتاجر المسجلة
+          </button>
+
+        </div>
+
+
+        <div
+          id="storesArea"
+          class="hidden"
+          style="margin-top:20px"
+        >
+
+          <h3>
+            المتاجر
+          </h3>
+
+          <div id="storesList">
+          </div>
+
+        </div>
+
+      </section>
+
+
+
+      <!-- تجهيز UltraMsg -->
+      <section class="card">
+
+        <div class="card-header">
+
+          <div>
+
+            <h2>
+              تجهيز WhatsApp للمتجر
+            </h2>
+
+            <p>
+              أدخل بيانات UltraMsg الخاصة بالمتجر مرة واحدة، وبعدها التاجر يربط جواله بالـQR.
+            </p>
+
+          </div>
+
+        </div>
+
+
+        <div class="form-grid">
+
+
+          <div class="form-group">
+
+            <label for="merchantId">
+              Merchant ID من سلة
+            </label>
+
+            <input
+              id="merchantId"
+              type="text"
+              placeholder="مثال: 123456789"
+            >
+
+          </div>
+
+
+          <div class="form-group">
+
+            <label for="instanceId">
+              UltraMsg Instance ID
+            </label>
+
+            <input
+              id="instanceId"
+              type="text"
+              placeholder="مثال: 189061"
+            >
+
+          </div>
+
+
+          <div class="form-group full">
+
+            <label for="token">
+              UltraMsg Token
+            </label>
+
+            <input
+              id="token"
+              type="password"
+              autocomplete="off"
+              placeholder="Token"
+            >
+
+          </div>
+
+        </div>
+
+
+        <div
+          class="actions"
+          style="margin-top:20px"
+        >
+
+          <button
+            id="save"
+            class="btn btn-primary btn-large"
+            type="button"
+          >
+            تجهيز المتجر
+          </button>
+
+        </div>
+
+
+        <div
+          id="result"
+          class="preview-box hidden"
+        >
+
+          <div class="preview-title">
+            النتيجة
+          </div>
+
+          <pre
+            id="resultText"
+            style="
+              white-space:pre-wrap;
+              direction:ltr;
+              text-align:left;
+              overflow:auto;
+            "
+          ></pre>
+
+        </div>
+
+      </section>
+
+
+    </main>
+
+  </div>
+
+
+  <script src="/admin.js"></script>
+
+</body>
+
+</html>
