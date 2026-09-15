@@ -18,6 +18,9 @@ const {
   logout
 } = require('./lib/ultramsg');
 const {
+  initDatabase,
+  checkDatabase,
+  closeDatabase,
   getStore,
   ensureStore,
   updateStore,
@@ -52,7 +55,8 @@ function validateEnvironment() {
     'SESSION_SECRET',
     'APP_ENCRYPTION_KEY',
     'ADMIN_KEY',
-    'WEBHOOK_SECRET'
+    'WEBHOOK_SECRET',
+    'DATABASE_URL'
   ];
 
   const missing = required.filter(
@@ -485,12 +489,24 @@ app.get('/', (req, res) => {
 // Health
 // ========================================
 
-app.get('/health', (req, res) => {
-  res.json({
-    status: 'healthy',
-    uptime: Math.floor(process.uptime()),
-    timestamp: new Date().toISOString()
-  });
+app.get('/health', async (req, res) => {
+  const databaseOk =
+    await checkDatabase();
+
+  return res
+    .status(databaseOk ? 200 : 503)
+    .json({
+      status:
+        databaseOk
+          ? 'healthy'
+          : 'degraded',
+      database:
+        databaseOk
+          ? 'up'
+          : 'down',
+      uptime: Math.floor(process.uptime()),
+      timestamp: new Date().toISOString()
+    });
 });
 
 
@@ -542,8 +558,17 @@ app.post(
         });
       }
 
+      const embeddedProfile =
+        extractStoreProfile(identity);
+
       await ensureStore(
-        String(merchantId)
+        String(merchantId),
+        {
+          storeName:
+            embeddedProfile.name || '',
+          storeDomain:
+            embeddedProfile.domain || ''
+        }
       );
 
       setSessionCookie(
@@ -644,7 +669,7 @@ app.get(
   async (req, res) => {
     try {
       let store =
-        getStore(req.merchantId) ||
+        await getStore(req.merchantId) ||
         await ensureStore(req.merchantId);
 
       store =
@@ -776,7 +801,7 @@ app.get(
   sessionMiddleware,
   async (req, res) => {
     const store =
-      getStore(req.merchantId);
+      await getStore(req.merchantId);
 
     if (!store) {
       return res.status(404).json({
@@ -869,7 +894,7 @@ app.get(
   sessionMiddleware,
   async (req, res) => {
     const store =
-      getStore(req.merchantId);
+      await getStore(req.merchantId);
 
     if (
       !store?.whatsapp?.instanceId ||
@@ -934,7 +959,7 @@ app.post(
   async (req, res) => {
     try {
       const store =
-        getStore(req.merchantId);
+        await getStore(req.merchantId);
 
       if (
         !store?.whatsapp?.instanceId ||
@@ -1104,9 +1129,9 @@ app.post(
 app.get(
   '/admin/api/stores',
   requireAdmin,
-  (req, res) => {
+  async (req, res) => {
     const stores =
-      listStores().map(
+      (await listStores()).map(
         (store) => ({
           merchantId: String(store.merchantId || ''),
           storeName: String(store.storeName || ''),
@@ -1230,7 +1255,7 @@ async function scheduleAbandonedCart(payload) {
   }
 
   const store =
-    getStore(merchantId) ||
+    await getStore(merchantId) ||
     await ensureStore(merchantId);
 
   if (!store.settings?.enabled) {
@@ -1568,30 +1593,94 @@ app.use((error, req, res, next) => {
 // Start server
 // ========================================
 
-app.listen(PORT, () => {
-  console.log(
-    '========================================='
-  );
+async function startServer() {
+  await initDatabase();
 
-  console.log(
-    `🚀 Salla Cart Recovery v2 running on port ${PORT}`
-  );
+  const server =
+    app.listen(PORT, () => {
+      console.log(
+        '========================================='
+      );
 
-  if (
-    String(process.env.DEV_MODE || '').toLowerCase() === 'true'
-  ) {
+      console.log(
+        `🚀 Salla Cart Recovery v2 running on port ${PORT}`
+      );
+
+      if (
+        String(process.env.DEV_MODE || '').toLowerCase() === 'true'
+      ) {
+        console.log(
+          `🧪 Local dashboard: http://localhost:${PORT}/dev/login?merchant=demo`
+        );
+      }
+
+      console.log(
+        `🔧 Admin: http://localhost:${PORT}/admin`
+      );
+
+      console.log(
+        '🗄️ PostgreSQL persistent storage enabled'
+      );
+
+      console.log(
+        '========================================='
+      );
+
+      startWorker();
+    });
+
+  let shuttingDown = false;
+
+  const shutdown = (signal) => {
+    if (shuttingDown) {
+      return;
+    }
+
+    shuttingDown = true;
+
     console.log(
-      `🧪 Local dashboard: http://localhost:${PORT}/dev/login?merchant=demo`
+      `\n${signal} received. Shutting down...`
     );
-  }
 
-  console.log(
-    `🔧 Admin: http://localhost:${PORT}/admin`
+    const forceExit =
+      setTimeout(() => {
+        process.exit(1);
+      }, 10000);
+
+    forceExit.unref();
+
+    server.close(async () => {
+      try {
+        await closeDatabase();
+      } catch (error) {
+        console.error(
+          '❌ Database shutdown error:',
+          extractErrorMessage(error)
+        );
+      }
+
+      clearTimeout(forceExit);
+      process.exit(0);
+    });
+  };
+
+  process.once(
+    'SIGTERM',
+    () => shutdown('SIGTERM')
   );
 
-  console.log(
-    '========================================='
+  process.once(
+    'SIGINT',
+    () => shutdown('SIGINT')
   );
+}
 
-  startWorker();
-});
+startServer()
+  .catch((error) => {
+    console.error(
+      '❌ Application startup failed:',
+      extractErrorMessage(error)
+    );
+
+    process.exit(1);
+  });

@@ -211,7 +211,7 @@
       '{customer_name}': 'أحمد',
       '{store_name}':
         currentStore?.storeName ||
-        'متجرك',
+        'اسم المتجر',
       '{products_text}':
         'منتجاتك المختارة',
       '{cart_total}':
@@ -226,7 +226,7 @@
       '{offer_line}':
         getOfferLinePreview(),
       '{checkout_url}':
-        'https://متجرك.com/checkout'
+        'https://example.com/checkout'
     };
 
     for (const [key, value] of Object.entries(replacements)) {
