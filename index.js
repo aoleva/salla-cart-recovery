@@ -5,7 +5,7 @@ const path = require('path');
 const express = require('express');
 const helmet = require('helmet');
 
-const { encryptSecret } = require('./lib/crypto');
+const { encryptSecret, decryptSecret } = require('./lib/crypto');
 const { sessionMiddleware, setSessionCookie } = require('./lib/auth');
 const {
   introspectEmbeddedToken,
@@ -96,14 +96,179 @@ function safeEqual(left, right) {
   return crypto.timingSafeEqual(a, b);
 }
 
+function isPlaceholderStoreName(name, merchantId) {
+  const value =
+    String(name || '')
+      .trim()
+      .replace(/\s+/g, ' ');
+
+  const id =
+    String(merchantId || '')
+      .trim();
+
+  if (!value) {
+    return true;
+  }
+
+  if (!id) {
+    return false;
+  }
+
+  const normalized =
+    value.toLowerCase();
+
+  return [
+    id,
+    `متجر ${id}`,
+    `store ${id}`,
+    `merchant ${id}`
+  ].some(
+    (candidate) =>
+      normalized ===
+      String(candidate).toLowerCase()
+  );
+}
+
+function extractStoreProfile(source) {
+  const root =
+    source?.data &&
+    typeof source.data === 'object'
+      ? source.data
+      : source || {};
+
+  const merchant =
+    root?.merchant ||
+    root?.store ||
+    source?.merchant ||
+    source?.store ||
+    null;
+
+  const name =
+    String(
+      merchant?.name ||
+      merchant?.store_name ||
+      root?.store_name ||
+      ''
+    ).trim();
+
+  const domain =
+    String(
+      merchant?.domain ||
+      merchant?.url ||
+      root?.domain ||
+      root?.store_domain ||
+      ''
+    ).trim();
+
+  return {
+    name,
+    domain
+  };
+}
+
+async function refreshStoreProfileFromSalla(merchantId, currentStore) {
+  let store = currentStore;
+
+  if (
+    !store ||
+    !store.salla?.accessTokenEnc
+  ) {
+    return store;
+  }
+
+  const needsName =
+    isPlaceholderStoreName(
+      store.storeName,
+      merchantId
+    );
+
+  const needsDomain =
+    !String(store.storeDomain || '').trim();
+
+  if (!needsName && !needsDomain) {
+    return store;
+  }
+
+  let accessToken = '';
+
+  try {
+    accessToken =
+      String(
+        decryptSecret(
+          store.salla.accessTokenEnc
+        ) ||
+        ''
+      ).trim();
+  } catch (error) {
+    console.warn(
+      `⚠️ Could not decrypt Salla access token for merchant ${merchantId}:`,
+      extractErrorMessage(error)
+    );
+
+    return store;
+  }
+
+  if (!accessToken) {
+    return store;
+  }
+
+  try {
+    const info =
+      await getUserInfo(accessToken);
+
+    const profile =
+      extractStoreProfile(info);
+
+    if (!profile.name && !profile.domain) {
+      return store;
+    }
+
+    store =
+      await updateStore(
+        merchantId,
+        (draft) => {
+          if (profile.name) {
+            draft.storeName =
+              profile.name;
+          }
+
+          if (profile.domain) {
+            draft.storeDomain =
+              profile.domain;
+          }
+        }
+      );
+
+    return store;
+  } catch (error) {
+    console.warn(
+      `⚠️ Could not refresh Salla store profile for merchant ${merchantId}:`,
+      extractErrorMessage(error)
+    );
+
+    return store;
+  }
+}
+
 function publicStore(store) {
   if (!store) {
     return null;
   }
 
+  const merchantId =
+    String(store.merchantId || '');
+
+  const storeName =
+    isPlaceholderStoreName(
+      store.storeName,
+      merchantId
+    )
+      ? ''
+      : String(store.storeName || '');
+
   return {
-    merchantId: String(store.merchantId || ''),
-    storeName: String(store.storeName || ''),
+    merchantId,
+    storeName,
     storeDomain: String(store.storeDomain || ''),
     active: store.active !== false,
     settings: store.settings || {},
@@ -478,9 +643,15 @@ app.get(
   sessionMiddleware,
   async (req, res) => {
     try {
-      const store =
+      let store =
         getStore(req.merchantId) ||
         await ensureStore(req.merchantId);
+
+      store =
+        await refreshStoreProfileFromSalla(
+          req.merchantId,
+          store
+        );
 
       return res.json({
         success: true,
@@ -1017,19 +1188,17 @@ async function handleAuthorize(payload) {
         payload?.expires ??
         null;
 
-      const merchantInfo =
-        info?.merchant ||
-        info?.store ||
-        null;
+      const profile =
+        extractStoreProfile(info);
 
-      if (merchantInfo?.name) {
+      if (profile.name) {
         store.storeName =
-          String(merchantInfo.name);
+          profile.name;
       }
 
-      if (merchantInfo?.domain) {
+      if (profile.domain) {
         store.storeDomain =
-          String(merchantInfo.domain);
+          profile.domain;
       }
     }
   );
