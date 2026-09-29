@@ -345,12 +345,9 @@ function normalizeUltraMsgStatus(statusRaw) {
 }
 
 function isWhatsappConnected(status) {
-  const value = String(status || '').toLowerCase();
+  const value = String(status || '').trim().toLowerCase().split(/\s+/)[0];
 
-  return (
-    value.includes('authenticated') ||
-    value.includes('connected')
-  );
+  return value === 'authenticated' || value === 'connected';
 }
 
 function extractErrorMessage(error, fallback = 'Unexpected error') {

@@ -72,12 +72,9 @@
   let currentMessageStyle = 'friendly';
 
   function isConnectedStatus(value) {
-    const status = String(value || '').toLowerCase();
+    const status = String(value || '').trim().toLowerCase().split(/\s+/)[0];
 
-    return (
-      status.includes('authenticated') ||
-      status.includes('connected')
-    );
+    return status === 'authenticated' || status === 'connected';
   }
 
   function cleanPhone(value) {
@@ -286,7 +283,7 @@
 
     const provisioned =
       Boolean(
-        whatsapp.tokenConfigured ||
+        whatsapp.tokenConfigured &&
         whatsapp.instanceId
       );
 
@@ -823,7 +820,7 @@
 
       const provisioned =
         Boolean(
-          whatsapp.tokenConfigured ||
+          whatsapp.tokenConfigured &&
           whatsapp.instanceId
         );
 
