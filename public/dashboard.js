@@ -1,6 +1,10 @@
 (() => {
   'use strict';
 
+  const context = new URLSearchParams(window.location.search).get('context');
+  const sessionToken = context ? sessionStorage.getItem(`salla-session:${context}`) : null;
+  const sessionHeaders = sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {};
+
   const $ = (id) => document.getElementById(id);
 
   const els = {
@@ -125,6 +129,7 @@
       credentials: 'include',
       ...options,
       headers: {
+        ...sessionHeaders,
         ...(options.body
           ? { 'Content-Type': 'application/json' }
           : {}),
@@ -563,7 +568,8 @@
   }
 
   async function refreshWhatsapp({
-    silent = false
+    silent = false,
+    throwOnError = false
   } = {}) {
     if (!silent) {
       els.refreshWhatsappBtn.disabled = true;
@@ -588,6 +594,7 @@
 
       return result?.store || null;
     } catch (error) {
+      if (throwOnError) throw error;
       if (!silent) {
         showAlert(
           error.message,
@@ -714,7 +721,9 @@
         await fetch(
           '/api/whatsapp/qr',
           {
-            credentials: 'include'
+            credentials: 'omit',
+            cache: 'no-store',
+            headers: sessionHeaders
           }
         );
 
@@ -801,7 +810,8 @@
     try {
       const store =
         await refreshWhatsapp({
-          silent: true
+          silent: true,
+          throwOnError: true
         });
 
       if (
@@ -826,7 +836,7 @@
 
       if (!provisioned) {
         throw new Error(
-          'خدمة WhatsApp لم تُجهز لهذا المتجر بعد. جهّز قناة الربط من إدارة التطبيق ثم أعد المحاولة.'
+          `قناة WhatsApp لم تُجهز بعد للمتجر ${currentStore?.merchantId || ''}. تواصل مع دعم التطبيق لتفعيل الربط.`
         );
       }
 

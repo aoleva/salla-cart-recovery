@@ -6,7 +6,7 @@ const express = require('express');
 const helmet = require('helmet');
 
 const { encryptSecret, decryptSecret } = require('./lib/crypto');
-const { sessionMiddleware, setSessionCookie } = require('./lib/auth');
+const { sessionMiddleware, setSessionCookie, createSessionToken } = require('./lib/auth');
 const {
   introspectEmbeddedToken,
   getUserInfo
@@ -568,13 +568,9 @@ app.post(
         }
       );
 
-      setSessionCookie(
-        res,
-        String(merchantId)
-      );
-
-      return res.json({
+      return res.set('Cache-Control', 'no-store').json({
         success: true,
+        sessionToken: createSessionToken(merchantId),
         merchantId: String(merchantId)
       });
 
@@ -1057,6 +1053,18 @@ app.post(
 
       await ensureStore(merchantId);
 
+      const normalizedInstance = instanceId.replace(/^instance/i, '');
+      if (!/^\d+$/.test(normalizedInstance)) {
+        return res.status(400).json({ success: false, message: 'UltraMsg Instance ID غير صالح.' });
+      }
+      const candidate = { whatsapp: { instanceId: normalizedInstance, tokenEnc: encryptSecret(token) } };
+      // Validate credentials before replacing a merchant's working channel.
+      try {
+        await getStatus(candidate);
+      } catch (_) {
+        return res.status(400).json({ success: false, message: 'تعذر التحقق من بيانات UltraMsg. لم يتم تغيير قناة المتجر.' });
+      }
+
       let store =
         await updateStore(
           merchantId,
@@ -1069,7 +1077,8 @@ app.post(
 
             s.whatsapp.phone = '';
             s.whatsapp.lastStatus = 'provisioned';
-          }
+          },
+          { uniqueWhatsappInstance: normalizedInstance }
         );
 
       try {
@@ -1110,9 +1119,9 @@ app.post(
         extractErrorMessage(error)
       );
 
-      return res.status(500).json({
+      return res.status(error.statusCode === 409 ? 409 : 500).json({
         success: false,
-        message: 'تعذر تجهيز WhatsApp للمتجر.'
+        message: error.statusCode === 409 ? error.message : 'تعذر تجهيز WhatsApp للمتجر.'
       });
     }
   }

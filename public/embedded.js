@@ -173,7 +173,7 @@
 
 
     const token =
-      embedded.auth
+      await embedded.auth
         ?.getToken?.();
 
 
@@ -261,9 +261,10 @@
     // 5) الانتقال للـ Dashboard
     // ========================================
 
-    window.location.replace(
-      '/dashboard'
-    );
+    if (!data.sessionToken) throw new Error('تعذر إنشاء جلسة المتجر.');
+    const context = crypto.randomUUID();
+    sessionStorage.setItem(`salla-session:${context}`, data.sessionToken);
+    window.location.replace(`/dashboard?context=${encodeURIComponent(context)}`);
 
 
   } catch (error) {

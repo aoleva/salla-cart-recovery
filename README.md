@@ -37,3 +37,23 @@ After the service is live, use its actual Render URL with these paths:
 Open the app from Salla to register the store, then open `/admin`, enter the
 admin key, load and select the store, and save its UltraMsg Instance ID and token.
 Return to Salla to scan the WhatsApp QR code.
+
+## Merchant isolation and channel provisioning
+
+Only the application operator provisions UltraMsg through `/admin`. Merchants
+install the Salla app and scan their own WhatsApp QR; they never enter provider
+credentials. Allocate a separate UltraMsg Instance to each merchant. Allocation
+is manual in this version; creating provider instances automatically is not implemented.
+
+Embedded login returns a signed eight-hour session scoped to the verified Salla
+merchant. Each app launch stores it under a random context in sessionStorage;
+dashboard API and QR requests use that token, not a shared cookie. After updating
+from the cookie-based version, close and reopen the app from Salla. A directly
+opened dashboard or API URL does not establish a merchant session.
+
+New admin assignments validate provider credentials and reject an Instance that
+is already assigned to another merchant, using a database transaction and lock.
+Existing duplicate assignments are not deleted or migrated automatically. Audit
+any channels previously assigned to multiple test stores before enabling recovery.
+
+Run `npm test` for session-isolation and channel-conflict regression checks.
